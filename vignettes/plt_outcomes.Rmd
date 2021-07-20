@@ -1,0 +1,57 @@
+# Vignette for extracting the outcome data from the RSV model and plotting
+
+```{r}
+
+library(patchwork) # for plotting
+
+```
+
+
+Below is an example script which plots all the incidence of each outcome per age group for each intervention
+
+```{r}
+
+# load dataframe with all outcomes for all interventions into dt_outcomes
+load(here::here("data", "cpp_model_output", "outcomes_all.RDS"))
+
+outcomes_plt <- df_outcomes$health_outcomes %>% pull(metric) %>% unique %>% levels # df_outcomes loaded in previous block
+intervention_plt <- "PAL_VHR_S" # name of the intervention
+
+
+df_outcomes$health_outcomes %>% filter(metric == "GP visits", effects == "total", inter == "PAL_VHR_S") %>% 
+    group_by(seed) %>% summarise(value = sum(value))
+
+data_plot <- df_outcomes$health_outcomes %>%
+    filter(effects == "total", inter == intervention_plt)
+
+# Example script to plot outcome absolute values
+p_abs <- seq_len(length(outcomes_plt)) %>%
+    map(~data_plot %>%
+        filter(metric == outcomes_plt[.x]) %>%
+            ggplot() +
+                geom_boxplot(aes(x = age_group, y = value)) +
+                facet_wrap(vars(metric)) + theme_minimal() +
+                theme(axis.text.x = element_text(size = 7, angle = 90),
+                    axis.title.x = element_blank(),
+                    axis.title.y = element_blank())
+)
+wrap_plots(p_abs) + plot_annotation(title = paste0("Absolute cases for intervention: ", intervention_plt))
+
+
+# If you want to plot proportion of age group then use
+p_rel <- seq_len(length(outcomes_plt)) %>%
+    map(~data_plot %>%
+        arrange(inter, effects, metric, seed, age_group) %>%
+        mutate(value_prop = value / age_pop) %>%
+        filter(metric == outcomes_plt[.x]) %>%
+            ggplot() +
+                geom_boxplot(aes(x = age_group, y = value_prop)) +
+                facet_wrap(vars(metric)) + theme_minimal() +
+                theme(axis.text.x = element_text(size = 7, angle = 90),
+                    axis.title.x = element_blank(),
+                    axis.title.y = element_blank())
+)
+
+wrap_plots(p_rel) + plot_annotation(title = paste0("Proportional cases for intervention: ", intervention_plt))
+
+```

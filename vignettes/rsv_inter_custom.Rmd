@@ -1,0 +1,142 @@
+---
+title: "rsv_inter_ew"
+author: "David Hodgson"
+date: "24/09/2020"
+output: html_document
+---
+
+
+# 1. Setup 
+# 1.1 Import libraries
+May need to downoad all of these (use install.packages)
+```{r libraries}
+
+library(Rcpp)       # For c++ intergration
+library(RcppEigen)  # Ditto
+library(coda)       # Ditto
+library(tidyverse)
+library(parallel)
+library(MASS)
+library(foreach)
+library(gridExtra)
+library(doParallel)
+library(BayesianTools)
+library(devtools)
+library(here)
+library(patchwork)
+source( here::here("src", "helpers.R")) #ensure c++14 is enabled
+
+```
+
+
+## 2 Import data for the epidemic model intervention model
+### 2.1 RunIntervention class
+
+This section calls a class from the cpp module inteface (RunInterventions.cpp) for the cpp intervention model (defined in RunInterventions.h).
+Then, using demographic data from the UK (ukdata) and model data needed for the intervention programmes (data_inter_uk), the intervention model class is initialised and ready to use! 
+
+```{r}
+
+sourceCpp(here("src", "RunInterventions.cpp")) # Uploads empty RunInterventions class
+source(here("R", "RunInterventionsClass.R")) # Uploads emmake_RunInterventionspty function
+burnin_yrs <- 2
+run_yrs <- 10
+
+# Load premade datasets
+load(file = here::here("data", "inter_model_input", "rsv_data_uk.RData")) # loads ukdata
+load(file = here::here("data", "inter_model_input", "inter_data_uk.RData")) # loads data_inter_uk
+
+classRunInterventions <- make_RunInterventions(RunInterventions, ukdata, data_inter_uk, burnin_yrs * 365, run_yrs * 365)
+
+```
+
+# 3. Code to run custom RSV intervention programmes
+
+To generate own custom intervention programmes must define a function which outputs a list of characteristics associated with seven different vaccination calendars.
+The seven vaccination calendars are
+* pal, Palivizumab programme
+* mAB_VHR, mabs programmes aimed at very-high-risk infants (< 9 months old)
+* mAB_HR, mabs programmes aimed at high-risk infants (< 12 months old)
+* mAB_LR, mabs programmes aimed at low-risk persons (everyone who's not high- or very-high-risk)
+* mat, maternal programme
+* LAV_HR, vaccination agaisnt high-risk infants (<12 months old)
+* LAV_LR, vaccination agaisnt low-risk persons.
+
+Each calendar requires a list of values, these are
+* id, indicator stating if the calendar should be implemented. (If calendar is not defined it is not implemented.)
+* age_id, age group which should be targeted (binary vector of values).
+* t_start, start time in weeks (week 1 starting Jul 1st)
+* t_end, end time in weeks, (week 1 starting Jul 1st) 
+* eff, efficacy value of the programme, usually needs a seed value.
+* cov, coverage of the programme (between 0 and 1).
+There are some value specific to a programme type
+* catchup (mAB_HR, mAB_LR), whether a catchup programme should be included during the first four weeks of the programme.
+* age_id_catchup (mAB_HR, mAB_LR), age group which should be targeted by catchup (binary vector of values).
+* uptake_type (LAV_HR, LAV_LR), if = 2 then uptake is assumed to be constant.  If equal to 1 then a uptake vector must be provided (See remake_hodgson.R for an examples of this).
+* eff_inf/eff_mat (mat), efficay of vaccination in prevevnt disease in infants (eff_inf), and in mothers (eff_mat).
+
+In addition, as vac_par_info list of values is needed, where
+* om_mab, is the average rate of loss of immunity due to long-acting mabs in days (default = 1 / 250)
+* direct, boolean indicating if the direct effects of vaccination should be calcualted only (default = false)
+* xi_boost, a value indicating the proportional increase of decrease in duration of immunity due to maternal vaccination relative to normal maternal immunity.
+
+
+Three examples of how to implement these calendars are given below. 
+
+Make your own custom 
+```{r}
+
+# Load relevant R scripts
+source("R/vac_cal.R") # generates the vaccination calendars
+source("R/calc_outcomes.R")  # calculate the outcomes
+# Load posteriors
+load(here("data", "inter_model_output", "posteriors.Rda"))  # posteriors from fitting in Hodgson et al. 2020
+# Load seeds
+seeds <- read.csv(here("data", "inter_model_input", "seed_samples.csv"), header = FALSE)[, 1] + 1
+
+# Ex.1 Long-acting monoclonal antibodies at HR, LR, and VHR, given seasonally with 90% coverage.
+ind_pal <- c(rep(1, 9), rep(0, 16)) # VHR (<8 months)
+ind_mabs <- c(rep(1, 1), rep(0, 24)) # Birth only (0 months only)
+mab_eff <- rweibull(1250, 11.8975, 0.7317) # efficacy of long-acting mabs
+# VHR, HR and LR at birth during the winter
+make_vac_program_info_custom_mabs <- function(seed) {
+  list(
+      mAB_VHR = list(id = TRUE, age_id = ind_pal, t_start = 15, t_end = 36, eff = mab_eff[seed], cov = 0.9),
+      mAB_HR =  list(id = TRUE, catchup = FALSE, age_id = ind_mabs, t_start = 15, t_end = 36, eff = mab_eff[seed], cov = 0.9),
+      mAB_LR =  list(id = TRUE, catchup = FALSE, age_id = ind_mabs, t_start = 15, t_end = 36, eff = mab_eff[seed], cov = 0.9)
+    )
+}
+
+# Ex.2 LAV vaccination all <1 years (HR and LR) with palivizumab programme, iven seasonally woth 90% coverage
+ind_pal <- c(rep(1, 9), rep(0, 16)) # VHR (<8 months)
+ind_lav <- c(rep(1, 12), rep(0, 13)) # All under 1s
+pal_eff <- rweibull(1250, 12.4311, 0.772251) # efficacy of palivizumab
+lav_eff <- rweibull(1250, 31.4637, 0.844676) # efficacy of lav
+make_vac_program_info_custom_LAV <- function(seed) {
+  list(
+      pal = list(id = TRUE, age_id = ind_pal, t_start = 15, t_end = 36, eff = pal_eff[seed], cov = 0.9),
+      LAV_HR = list(id = TRUE, age_id = ind_lav, uptake_type = 2, t_start = 15, t_end = 36, eff = lav_eff[seed], cov = 0.9),
+      LAV_LR = list(id = TRUE, age_id = ind_lav, uptake_type = 2, t_start = 15, t_end = 36, eff = lav_eff[seed], cov = 0.9)
+    )
+}
+
+# Ex.3 Maternal vaccination all with Palivizumab given seasonally (July - Oct) with 60% coverage.
+ind_pal <- c(rep(1, 9), rep(0, 16)) # VHR (<8 months)
+ind_parents <- c(0,0,0,0,0,0,0,0,0,0,0,0,0, 0,   0,   0,   0,   0,   1.0,1.0,1.0,0,0,0,0) # 15-44 (parents)
+pal_eff <- rweibull(1250, 12.4311, 0.772251) # efficacy of palivizumab
+mat_eff <- rweibull(1250, 3.32676, 0.461343) # efficacy in neonates
+lav_eff <- rweibull(1250, 31.4637, 0.844676) # efficacy in mothers
+make_vac_program_info_custom_mats <- function(seed) {
+  list(
+      pal = list(id = TRUE, age_id = ind_pal, t_start = 15, t_end = 36, eff = pal_eff[seed], cov = 0.9),
+      mat =  list(id = TRUE, age_id = ind_parents, t_start = 1, t_end = 21*7 + 1, eff_inf = mat_eff[seed], eff_mat = lav_eff[seed], cov = 0.6)
+    )
+}
+
+vac_par_info <- list(om_mab = 1 / 250, direct = FALSE, xi_boost = 1)
+
+output1 <- run_sample_custom(seeds, make_vac_program_info_custom_mabs, vac_par_info, 0)
+output2 <- run_sample_custom(seeds, make_vac_program_info_custom_LAV, vac_par_info, 0)
+output3 <- run_sample_custom(seeds, make_vac_program_info_custom_mats, vac_par_info, 0.6)
+
+```
