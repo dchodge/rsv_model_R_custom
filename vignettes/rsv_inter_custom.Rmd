@@ -52,38 +52,8 @@ classRunInterventions <- make_RunInterventions(RunInterventions, ukdata, data_in
 
 # 3. Code to run custom RSV intervention programmes
 
-To generate own custom intervention programmes must define a function which outputs a list of characteristics associated with seven different vaccination calendars.
-The seven vaccination calendars are
-* pal, Palivizumab programme
-* mAB_VHR, mabs programmes aimed at very-high-risk infants (< 9 months old)
-* mAB_HR, mabs programmes aimed at high-risk infants (< 12 months old)
-* mAB_LR, mabs programmes aimed at low-risk persons (everyone who's not high- or very-high-risk)
-* mat, maternal programme
-* LAV_HR, vaccination agaisnt high-risk infants (<12 months old)
-* LAV_LR, vaccination agaisnt low-risk persons.
+Three examples of how to implement your own custom calendars are given below. 
 
-Each calendar requires a list of values, these are
-* id, indicator stating if the calendar should be implemented. (If calendar is not defined it is not implemented.)
-* age_id, age group which should be targeted (binary vector of values).
-* t_start, start time in weeks (week 1 starting Jul 1st)
-* t_end, end time in weeks, (week 1 starting Jul 1st) 
-* eff, efficacy value of the programme, usually needs a seed value.
-* cov, coverage of the programme (between 0 and 1).
-There are some value specific to a programme type
-* catchup (mAB_HR, mAB_LR), whether a catchup programme should be included during the first four weeks of the programme.
-* age_id_catchup (mAB_HR, mAB_LR), age group which should be targeted by catchup (binary vector of values).
-* uptake_type (LAV_HR, LAV_LR), if = 2 then uptake is assumed to be constant.  If equal to 1 then a uptake vector must be provided (See remake_hodgson.R for an examples of this).
-* eff_inf/eff_mat (mat), efficay of vaccination in prevevnt disease in infants (eff_inf), and in mothers (eff_mat).
-
-In addition, as vac_par_info list of values is needed, where
-* om_mab, is the average rate of loss of immunity due to long-acting mabs in days (default = 1 / 250)
-* direct, boolean indicating if the direct effects of vaccination should be calcualted only (default = false)
-* xi_boost, a value indicating the proportional increase of decrease in duration of immunity due to maternal vaccination relative to normal maternal immunity.
-
-
-Three examples of how to implement these calendars are given below. 
-
-Make your own custom 
 ```{r}
 
 # Load relevant R scripts
@@ -135,8 +105,8 @@ make_vac_program_info_custom_mats <- function(seed) {
 
 vac_par_info <- list(om_mab = 1 / 250, direct = FALSE, xi_boost = 1)
 
-output1 <- run_sample_custom(seeds, make_vac_program_info_custom_mabs, vac_par_info, 0)
-output2 <- run_sample_custom(seeds, make_vac_program_info_custom_LAV, vac_par_info, 0)
-output3 <- run_sample_custom(seeds, make_vac_program_info_custom_mats, vac_par_info, 0.6)
+output1 <- run_sample_custom(seeds[1:100], make_vac_program_info_custom_mabs, vac_par_info, 0)
+output2 <- run_sample_custom(seeds[1:100], make_vac_program_info_custom_LAV, vac_par_info, 0)
+output3 <- run_sample_custom(seeds[1:100], make_vac_program_info_custom_mats, vac_par_info, 0.6)
 
 ```

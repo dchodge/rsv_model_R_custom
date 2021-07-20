@@ -318,7 +318,7 @@ get_dose <- function(output) {
 run_sample_custom <- function(seeds, func_vac, vac_par_info, cov_c) {
 
   econmetric_list <- list(); outcomes_list <- list(); i <- 1;
-    for (seed in seeds[1:100]) {
+    for (seed in seeds) {
     
       vac_program_info_custom <- func_vac(seed)
 
