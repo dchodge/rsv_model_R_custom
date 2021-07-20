@@ -1,4 +1,4 @@
-# R package implementation of the cpp from Hodgson et al. 2020
+# R package implementation of the cpp code from Hodgson et al. 2020
 ## Summary
 
 This package provides an R implementation of the cpp code for the RSV intervention programmes which were evaluated in [Hodgson et al. 2020]( https://doi.org/10.1186/s12916-020-01802-8). In addition, this code provides an interfact for custom intervention programmes to be evaluated which are not explored in the paper. 
