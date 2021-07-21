@@ -14,7 +14,7 @@
 #include <boost/random.hpp>
 #include <boost/math/distributions.hpp>
 #include "ascent/Ascent.h"
-#include "manipContacts.h"
+//#include "manipContacts.h"
 
 // [[Rcpp::depends(RcppEigen)]]
 // [[Rcpp::plugins("cpp14")]]

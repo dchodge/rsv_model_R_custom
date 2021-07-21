@@ -24,7 +24,7 @@ library(BayesianTools)
 library(devtools)
 library(here)
 library(patchwork)
-source( here::here("src", "helpers.R")) #ensure c++14 is enabled
+#source( here::here("src", "helpers.R")) #ensure c++14 is enabled
 
 ```
 
@@ -105,8 +105,8 @@ make_vac_program_info_custom_mats <- function(seed) {
 
 vac_par_info <- list(om_mab = 1 / 250, direct = FALSE, xi_boost = 1)
 
-output1 <- run_sample_custom(seeds[1:100], make_vac_program_info_custom_mabs, vac_par_info, 0)
-output2 <- run_sample_custom(seeds[1:100], make_vac_program_info_custom_LAV, vac_par_info, 0)
-output3 <- run_sample_custom(seeds[1:100], make_vac_program_info_custom_mats, vac_par_info, 0.6)
+output1 <- run_sample_custom(seeds[1:100], make_vac_program_info_custom_mabs, vac_par_info, 0, post)
+output2 <- run_sample_custom(seeds[1:100], make_vac_program_info_custom_LAV, vac_par_info, 0, post)
+output3 <- run_sample_custom(seeds[1:100], make_vac_program_info_custom_mats, vac_par_info, 0.6, post)
 
 ```
