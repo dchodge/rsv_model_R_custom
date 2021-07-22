@@ -74,12 +74,13 @@ all_eff <- list(
 )
 
 # Get the intervention programmes names
-load(here::here("data", "outcomes_all.RDS")) 
+load(here::here("data", "cpp_model_output", "outcomes_all.RDS")) 
 programmes <- df_outcomes$health_outcomes %>% pull(inter) %>% unique
 
 # Information about the models
 vac_par_info <- list(om_mab = 1 / 250, direct = FALSE, xi_boost = 1)
 
+# run programmes and get annual estimates only (all outcomes it becomes a bit big)
 outcomes <- list(); econmetric <- list();
 for(prog in 1:15) {
   econmetric_list <- list(); outcomes_list <- list(); i <- 1;
@@ -88,7 +89,7 @@ for(prog in 1:15) {
     vac_dose <- create_calendars_hodgson(prog, seed, all_eff, "dose")
     out <- classRunInterventions$Sample(vac_cal[["out"]], vac_dose[["out"]], vac_cal[["cov_c"]],
       vac_par_info, as.matrix(post)[seed, ])
-    outcomes_cea <- get_outcomes(out, as.matrix(post)[seed, ], seed)
+    outcomes_cea <- get_outcomes(out, as.matrix(post)[seed, ], seed, 0.035)
     
     outcomes_list[[i]] <- outcomes_cea$outcomes
     econmetric_list[[i]] <- outcomes_cea$econ
