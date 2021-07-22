@@ -2,8 +2,9 @@
 #' 
 #' @param inci A matrix of incidence in each age, social, and risk group.
 #' @param seed An integer value
+#' @param t_w Week no
 #' @return The number of annual GP cases in each age group vector.
-get_GP <- function(inci, seed) {
+get_GP <- function(inci, t_w, seed) {
     set.seed(seed)
 
     # GET RISKS
@@ -44,15 +45,22 @@ get_GP <- function(inci, seed) {
     out_hr <- (1:25 %>% map(~sum(inci[(c(2, 5, 8) + 9 * (.x - 1))])) %>% unlist) * risk_hr
     out_lr <- (1:25 %>% map(~sum(inci[(c(3, 6, 9) + 9 * (.x - 1))])) %>% unlist) * risk_lr
 
-    out_vhr + out_hr + out_lr
+    data.frame(
+        outcome = "gp_visits",
+        seed = seed,
+        time = t_w,
+        age_group = 1:25,
+        incidence = out_vhr + out_hr + out_lr
+    )
 }
 
 #' Function to convert incidence to hospital visits
 #' 
 #' @param inci A matrix of incidence in each age, social, and risk group.
 #' @param seed An integer value
+#' @param t_w Week no
 #' @return The number of annual hospital cases in each age group vector.
-get_hosp <- function(inci, seed) {
+get_hosp <- function(inci, t_w, seed) {
     set.seed(seed)
     # GET RISKS
     risk_lr <- vector(mode = "numeric", length = 25)
@@ -115,7 +123,13 @@ get_hosp <- function(inci, seed) {
     out_hr <- (1:25 %>% map(~sum(inci[(c(2, 5, 8) + 9 * (.x - 1))])) %>% unlist) * risk_hr
     out_lr <- (1:25 %>% map(~sum(inci[(c(3, 6, 9) + 9 * (.x - 1))])) %>% unlist) * risk_lr
 
-    out_vhr + out_hr + out_lr
+    data.frame(
+        outcome = "hospital_cases",
+        seed = seed,
+        time = t_w,
+        age_group = 1:25,
+        incidence = out_vhr + out_hr + out_lr
+    )
 
 }
 
@@ -123,8 +137,9 @@ get_hosp <- function(inci, seed) {
 #' 
 #' @param inci A matrix of incidence in each age, social, and risk group.
 #' @param seed An integer value
+#' @param t_w Week no
 #' @return The number of annual bed days cases in each age group vector.
-get_bd <- function(inci, seed) {
+get_bd <- function(inci, t_w, seed) {
     set.seed(seed)
 
     risk_lr <- vector(mode = "numeric", length = 25)
@@ -190,7 +205,13 @@ get_bd <- function(inci, seed) {
     out_hr <- (1:25 %>% map(~sum(inci[(c(2, 5, 8) + 9 * (.x - 1))])) %>% unlist) * risk_hr
     out_lr <- (1:25 %>% map(~sum(inci[(c(3, 6, 9) + 9 * (.x - 1))])) %>% unlist) * risk_lr
 
-    out_vhr + out_hr + out_lr
+    data.frame(
+        outcome = "bed_days",
+        seed = seed,
+        time = t_w,
+        age_group = 1:25,
+        incidence = out_vhr + out_hr + out_lr
+    )
 
 }
 
@@ -198,8 +219,9 @@ get_bd <- function(inci, seed) {
 #' 
 #' @param inci A matrix of incidence in each age, social, and risk group.
 #' @param seed An integer value
+#' @param t_w Week no
 #' @return The number of annual death cases in each age group vector.
-get_death <- function(inci, seed) {
+get_death <- function(inci, t_w, seed) {
     set.seed(seed)
     risk_lr <- vector(mode = "numeric", length = 25)
     for (a in 1:6) # < 6 months
@@ -235,15 +257,22 @@ get_death <- function(inci, seed) {
     out_hr <- (1:25 %>% map(~sum(inci[(c(2, 5, 8) + 9 * (.x - 1))])) %>% unlist) * risk_hr
     out_lr <- (1:25 %>% map(~sum(inci[(c(3, 6, 9) + 9 * (.x - 1))])) %>% unlist) * risk_lr
 
-    out_vhr + out_hr + out_lr
+    data.frame(
+        outcome = "deaths",
+        seed = seed,
+        time = t_w,
+        age_group = 1:25,
+        incidence = out_vhr + out_hr + out_lr
+    )
 }
 
 #' Function to convert incidence to the number of symptomatic cases
 #' 
 #' @param inci A matrix of incidence in each age, social, and risk group.
 #' @param seed An integer value
+#' @param t_w Week no
 #' @return The number of annual symptomatic cases in each age group vector.
-get_S <- function(inci, posterior, seed) {
+get_S <- function(inci, posterior, t_w, seed) {
     set.seed(seed)
     risk_lr <- vector(mode = "numeric", length = 25)
     for (a in 1:12)
@@ -261,7 +290,13 @@ get_S <- function(inci, posterior, seed) {
     out_hr <- (1:25 %>% map(~sum(inci[(c(2, 5, 8) + 9 * (.x - 1))])) %>% unlist) * risk_hr
     out_lr <- (1:25 %>% map(~sum(inci[(c(3, 6, 9) + 9 * (.x - 1))])) %>% unlist) * risk_lr
 
-    out_vhr + out_hr + out_lr
+    data.frame(
+        outcome = "symptomatic_cases",
+        seed = seed,
+        time = t_w,
+        age_group = 1:25,
+        incidence = out_vhr + out_hr + out_lr
+    )
 }
 
 #' Function to convert incidence of outcomes into the QALY loss
@@ -354,36 +389,41 @@ get_costA <- function(doses_w) {
 #' @param outputs Output from the RunInterventions model
 #' @param posterior Posterior distributions from calibration
 #' @param seed integer value
+#' @param r discount rate (default is 0.035)
 #' @return list of two dataframes, once detailing the health outcomes, one the economic outcomes
-get_outcomes <- function(outputs, posterior, seed) {
+get_outcomes <- function(outputs, posterior, seed, r = 0.035) {
     inci <- outputs$inci
     doses <- outputs$doses
 
-    r <- 0.035
     QALY <- 0
     costP <- 0
     costA <- 0
-
     death_tot <- hosp_tot <- bd_tot <- gp_tot <- symp_tot <- 0
+    outcomes_age_week <- data.frame()
+
     for (t_w in 1:nrow(inci)) {
-        symp <- get_S(inci[t_w, ], posterior, seed)
-        gp <- get_GP(inci[t_w, ], seed)
-        bd <- get_bd(inci[t_w, ], seed)
-        hosp <- get_hosp(inci[t_w, ], seed)
-        death <- get_death(inci[t_w, ], seed)
+        inci_tw <- inci[t_w, ]
+        symp <- get_S(inci_tw, posterior, t_w, seed)
+        gp <- get_GP(inci_tw, t_w, seed)
+        bd <- get_bd(inci_tw, t_w, seed)
+        hosp <- get_hosp(inci_tw, t_w, seed)
+        death <- get_death(inci_tw, t_w, seed)
         if (t_w >= (nrow(inci) - 52)) {
-            symp_tot <- symp_tot + sum(symp)
-            gp_tot <- gp_tot + sum(gp)
-            bd_tot <- bd_tot + sum(bd)
-            hosp_tot <- hosp_tot + sum(hosp)
-            death_tot <- death_tot + sum(death)
+            symp_tot <- symp_tot + sum(symp$incidence)
+            gp_tot <- gp_tot + sum(gp$incidence)
+            bd_tot <- bd_tot + sum(bd$incidence)
+            hosp_tot <- hosp_tot + sum(hosp$incidence)
+            death_tot <- death_tot + sum(death$incidence)
         }
 
-        QALY <- QALY + get_QALY(symp, gp, hosp, bd, death, seed) * exp(-(t_w - 1) * r / 52.0)
-        costP <- costP + get_costP(gp, bd, seed) * exp(-(t_w - 1) * r / 52.0)
+        outcomes_age <- bind_rows(symp, gp, bd, hosp, death)
+        outcomes_age_week <- bind_rows(outcomes_age_week, outcomes_age)
+        QALY <- QALY + get_QALY(symp$incidence, gp$incidence, hosp$incidence, bd$incidence, death$incidence, seed) * exp(-(t_w - 1) * r / 52.0)
+        costP <- costP + get_costP(gp$incidence, bd$incidence, seed) * exp(-(t_w - 1) * r / 52.0)
         costA <- costA + get_costA(doses[t_w, ]) * exp(-(t_w - 1) * r / 52.0)
     }
     list(
+        outcomes_age_week = outcomes_age_week,
         outcomes = data.frame(symp_tot = symp_tot, gp_tot = gp_tot, bd_tot = bd_tot, hosp_tot = hosp_tot, death_tot = death_tot),
         econ = data.frame(QALY = QALY, costP = costP, costA = costA)
     )
