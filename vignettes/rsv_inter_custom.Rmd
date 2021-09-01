@@ -110,3 +110,59 @@ output2 <- run_sample_custom(seeds[1:100], make_vac_program_info_custom_LAV, vac
 output3 <- run_sample_custom(seeds[1:100], make_vac_program_info_custom_mats, vac_par_info, 0.6, post)
 
 ```
+
+## 4. Code to run just to get weekly outcomes by age group
+
+```{r}
+
+# Load relevant R scripts
+source("R/vac_cal.R") # generates the vaccination calendars
+source("R/calc_outcomes.R")  # calculate the outcomes
+# Load posteriors
+load(here("data", "inter_model_output", "posteriors.Rda"))  # posteriors from fitting in Hodgson et al. 2020
+# Load seeds
+seeds <- read.csv(here("data", "inter_model_input", "seed_samples.csv"), header = FALSE)[, 1] + 1
+
+# DEFAULT Palivizumab programme only for Lucy Gregory
+ind_pal <- c(rep(1, 9), rep(0, 16)) # VHR (<8 months)
+pal_eff <- rweibull(1250, 12.4311, 0.772251) # efficacy of palivizumab
+make_vac_program_info_custom_default <- function(seed) {
+  list(
+      pal = list(id = TRUE, age_id = ind_pal, t_start = 15, t_end = 36, eff = pal_eff[seed], cov = 0.9)
+    )
+}
+
+vac_par_info <- list(om_mab = 1 / 250, direct = FALSE, xi_boost = 1)
+
+output_default <- run_sample_custom(seeds[1:100], make_vac_program_info_custom_default, vac_par_info, 0, post)
+save(output_default, file = here("data", "inter_model_output", "status_quo.RData"))
+
+```
+
+
+```{r}
+
+meanfiles <- output_default[[1]] %>%
+  group_by(outcome, time, age_group) %>%
+  dplyr::summarise(incidence = mean(incidence)) %>%
+  mutate(time = time - 52*9) %>% as.data.frame
+
+save(meanfiles, file = here("data", "inter_model_output", "status_quo_mean.RData"))
+
+meanfiles %>% 
+  filter(age_group == 1, outcome == "all_cases") %>%
+  ggplot() + 
+    geom_line(aes(x = time, y = incidence))
+
+age_pop <- c(56605, 56605, 56605, 56605, 56605, 56605, 56605, 56605, 56605, 56605, 56605, 56605,
+    679265, 679265, 679265, 679265, 3.396325e6, 3.396325e6, 6.79265e6, 6.79265e6, 6.79265e6, 6.79265e6,
+    6.79265e6, 6.79265e6, 7.799725e6)
+
+meanfiles_rate <- meanfiles %>% group_by(outcome, time) %>% mutate(rates = incidence / age_pop * 100000)
+
+
+load(file = here("data", "inter_model_output", "status_quo_mean.RData"))
+
+write.csv(meanfiles_rate, file = here("data", "inter_model_output", "status_quo_mean.csv"))
+
+```

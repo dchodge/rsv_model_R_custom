@@ -266,6 +266,22 @@ get_death <- function(inci, t_w, seed) {
     )
 }
 
+get_Inc <- function(inci, t_w, seed) {
+
+    out_vhr <- (1:25 %>% map(~sum(inci[(c(1, 4, 7) + 9 * (.x - 1))])) %>% unlist)
+    out_hr <- (1:25 %>% map(~sum(inci[(c(2, 5, 8) + 9 * (.x - 1))])) %>% unlist) 
+    out_lr <- (1:25 %>% map(~sum(inci[(c(3, 6, 9) + 9 * (.x - 1))])) %>% unlist)
+
+    data.frame(
+        outcome = "all_cases",
+        seed = seed,
+        time = t_w,
+        age_group = 1:25,
+        incidence = out_vhr + out_hr + out_lr
+    )
+}
+
+
 #' Function to convert incidence to the number of symptomatic cases
 #' 
 #' @param inci A matrix of incidence in each age, social, and risk group.
@@ -398,26 +414,28 @@ get_outcomes <- function(outputs, posterior, seed, r = 0.035) {
     QALY <- 0
     costP <- 0
     costA <- 0
-    death_tot <- hosp_tot <- bd_tot <- gp_tot <- symp_tot <- 0
+    death_tot <- hosp_tot <- bd_tot <- gp_tot <- symp_tot <- cases_tot <- 0
     outcomes_age_week <- data.frame()
 
     for (t_w in 1:nrow(inci)) {
         inci_tw <- inci[t_w, ]
+        cases <- get_Inc(inci_tw, t_w, seed)
         symp <- get_S(inci_tw, posterior, t_w, seed)
         gp <- get_GP(inci_tw, t_w, seed)
         bd <- get_bd(inci_tw, t_w, seed)
         hosp <- get_hosp(inci_tw, t_w, seed)
         death <- get_death(inci_tw, t_w, seed)
         if (t_w >= (nrow(inci) - 52)) {
+            cases_tot <- cases_tot + sum(cases$incidence)
             symp_tot <- symp_tot + sum(symp$incidence)
             gp_tot <- gp_tot + sum(gp$incidence)
             bd_tot <- bd_tot + sum(bd$incidence)
             hosp_tot <- hosp_tot + sum(hosp$incidence)
             death_tot <- death_tot + sum(death$incidence)
+            outcomes_age <- bind_rows(cases, symp, gp, bd, hosp, death)
+            outcomes_age_week <- bind_rows(outcomes_age_week, outcomes_age)
         }
 
-        outcomes_age <- bind_rows(symp, gp, bd, hosp, death)
-        outcomes_age_week <- bind_rows(outcomes_age_week, outcomes_age)
         QALY <- QALY + get_QALY(symp$incidence, gp$incidence, hosp$incidence, bd$incidence, death$incidence, seed) * exp(-(t_w - 1) * r / 52.0)
         costP <- costP + get_costP(gp$incidence, bd$incidence, seed) * exp(-(t_w - 1) * r / 52.0)
         costA <- costA + get_costA(doses[t_w, ]) * exp(-(t_w - 1) * r / 52.0)
