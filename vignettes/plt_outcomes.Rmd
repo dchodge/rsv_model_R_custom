@@ -94,4 +94,8 @@ cost_th <- outputs[["NONE"]]$cost %>%
     group_by(type, metric) %>%
     summarise(value = mean(value)) 
 
+# Look at vacciantion calendar
+outputs[["NONE"]]$vac_cal # not very intervention of course
+outputs[["MAB_ALL_S"]]$vac_cal # bit more interesting
+
 ```
