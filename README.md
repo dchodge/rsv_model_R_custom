@@ -49,9 +49,9 @@ Please see both `rsv_inter_custom.Rmd` and `rsv_inter_hodgson.Rmd` for examples 
 * `inter_model_input/rsv_data_uk.RData`, a list of UK-specific demographic data used to define the ODEs of the transmission model (see `inter_model_input/rsv_data_desc.R` for a full description).
 * `inter_model_input/inter_data_uk.RData`, a further list of UK-specific demographic data used to define the ODEs of the transmission model. (See `R/RunInterventionsClass.R` for a full description).
 * `inter_model_input/seed_samples.csv`, a vector of integers corresponding to the seed values in the random number generation
-* `inter_model_output/inter_all_econ.RData`, economic output from the R implementation of the 15 intervention programmes from Hodgson et al. (see `rsv_inter_hodgson.Rmd`)
-* `inter_model_output/inter_all_outcome.RData`, health outcomes output from the R implementation of the 15 interventio programmes from Hodgson et al. (see `rsv_inter_hodgson.Rmd`)
-  
+* `inter_model_input/hodgson_programmes.RData`, .Rdata file of the inputs required to run the 15 intervention programmes, created from the `R/remake_hodgson.R` rile
+* `inter_model_output/all_prog_sim.RData`, output, (incidence, costs, qaly) from the R implementation of the 15 intervention programmes from Hodgson et al. (see `rsv_inter_hodgson.Rmd`)
+
  ### /R folder
  * `RunInterventionsClass.R`, a function to initialised the RunInterventions class
  * `vac_cal.R`, functions to calculate the daily vaccination calendar, given a set of parameters values assocaited with the vaccination programmes. 
@@ -65,6 +65,7 @@ Please see both `rsv_inter_custom.Rmd` and `rsv_inter_hodgson.Rmd` for examples 
  * `rsv_inter_hodgson.Rmd`, a walktrhough how to evaluate the 15 intervention programmes outlined in Hodgson et al.
  * `rsv_inter_custom.Rmd`, a walkthrough how to evaluate your own intervention programme and output the health and economic outcomes. 
  * `plt_outcomes.Rmd`, some plotting functions for the 15 intervention programmes outlined in Hodgson et al. 2020
+ * `r_cpp_compare.Rmd`, Comparing the outputs of the cpp model and the R model.
 
 ## Linked publications
 
