@@ -55,7 +55,7 @@ get_mAB_calendar <- function(mab_info) {
             }
         }
     }
-    for (i in (mab_info$t_start):(mab_info$t_end)) {
+    for (i in (mab_info$t_start):(mab_info$t_end )) {
         for (j in 1:25) {
            sero[(i - 1) %% 365 + 1, j] <- calendar[(i - 1) %% 365 + 1, j] * mab_info$eff;
         }
@@ -142,7 +142,7 @@ get_daily_uptake <- function(up_week_raw, start_time)
     }
             
     for (i in 1:365) {
-        pos_day <- (i - 1 + start_time*7) %% 365 + 1;
+        pos_day <- (i - 1 + start_time) %% 365 + 1;
         up_day[pos_day] <- (up_week[((i / 7 + start_time) %% 52) + 1] - up_week[((i/7 - 1 + start_time) %% 52) + 1]) / 7.0;
         if (up_day[pos_day] < 0)
             up_day[pos_day] <- 0
@@ -316,8 +316,9 @@ get_dose <- function(output) {
 #' @param cov_c The proportion of infants who are in the targeted group (equal to the coverage of maternal vaccination.)
 #' @return A list of two dataframes, the first shows the annual incidence for health outcomes, the second shows the economic metrics.
 run_sample_custom <- function(seeds, func_vac, vac_par_info, cov_c, post) {
-
-  outcomes_week_age_list <- list(); econmetric_list <- list(); outcomes_annual_list <- list(); i <- 1;
+    QALY_list <- list(); cost_list <- list();
+    outcomes_week_age_list <- list(); 
+    i <- 1;
     for (seed in seeds) {
     
       vac_program_info_custom <- func_vac(seed)
@@ -329,13 +330,17 @@ run_sample_custom <- function(seeds, func_vac, vac_par_info, cov_c, post) {
         vac_par_info, as.matrix(post)[seed, ])
       outcomes_cea <- get_outcomes(out, as.matrix(post)[seed, ], seed, 0.035)
       
+      QALY_list[[i]] <- outcomes_cea$QALY
+      cost_list[[i]] <- outcomes_cea$cost
       outcomes_week_age_list[[i]] <- outcomes_cea$outcomes_age_week
-      outcomes_annual_list[[i]] <- outcomes_cea$outcomes
-      econmetric_list[[i]] <- outcomes_cea$econ
+
       cat("sample_no: ", i, "\n"); i <- i + 1;
     }
-    list( outcomes_week_age = bind_rows(outcomes_week_age_list), 
-        outcomes_annual = bind_rows(outcomes_annual_list), 
-        econmetric = bind_rows(econmetric_list))
-
+    colnames(out$doses) <- c("pal", "mab", "lav", "mat")
+    list(
+        QALY = bind_rows(QALY_list),
+        cost = bind_rows(cost_list),
+        outcomes_week_age = bind_rows(outcomes_week_age_list),
+        vac_cal = out$doses
+    )
   }

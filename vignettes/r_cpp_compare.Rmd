@@ -1,0 +1,193 @@
+
+```{r}
+
+library(Rcpp)
+library(RcppEigen) 
+library(coda) 
+library(tidyverse)
+library(parallel)
+library(MASS)
+library(foreach)
+library(gridExtra)
+library(doParallel)
+library(devtools)
+library(here)
+library(patchwork)
+
+```
+
+# 1. Comparative metrics, R versions v.s. cpp versions
+Compare the outputs of the R implementation and the original cpp version to check for consistency.
+* Not exactly the same yet, need to look further
+* Look at incidence only maybe? (not symptomatic cases)
+
+Compare the symptomatic cases only of the first seed value when no intervention is given.
+
+```{r}
+
+load(file = here("data", "cpp_model_output", "outcomes_all.RDS"))
+load(file = here::here("data", "inter_model_output", "all_prog_sim.RData")) # outputs
+seed_val <-  304 # seed value to compare
+# 1082
+cpp_by_inci_age <- df_outcomes$health_outcomes %>%
+    filter(effects == "total") %>%
+    mutate(type = "cpp") %>%
+    ungroup %>% group_by(metric, age_group, inter, type) %>% 
+    filter(seed == seed_val) %>%
+    ungroup %>%
+    filter(inter == "NONE", metric == "Symptomatic cases") %>% 
+    dplyr::select(metric, age_group, type, value) %>% as.data.frame
+
+# R stuff, seed 305, 1083, 168
+R_by_inci_age <- outputs[[1]]$outcomes_week_age %>%
+    group_by(outcome, time, age_group) %>%
+    filter(seed == seed_val + 1) %>%
+   # summarise(incidence = mean(incidence)) %>%
+    mutate(outcome = case_when(
+        outcome == "all_cases"~"All cases",
+        outcome == "symptomatic_cases"~"Symptomatic cases",
+        )) %>%
+    filter(outcome == "Symptomatic cases") %>%
+    group_by(outcome, age_group) %>%
+    summarise(incidence = sum(incidence)) %>%
+    dplyr::select(metric = outcome, age_group, value = incidence) %>%
+    mutate(type = "R", age_group = levels(cpp_by_inci_age$age_group)[2:26])
+
+compare_vals <- cpp_by_inci_age %>%
+  left_join(R_by_inci_age, by = "age_group") %>%
+  dplyr::select(metric = metric.x, age_group, value_cpp = value.x, value_R = value.y) %>%
+  mutate(value_diff = value_R - value_cpp)
+
+compare_vals <- compare_vals %>% 
+  mutate(age_group = factor(age_group, levels = compare_vals$age_group))
+
+compare_vals %>%
+  ggplot() +
+    geom_point(aes(x = age_group, y = value_diff)) +
+    theme_minimal() +
+    labs(x = "Age group", y = "Difference in incidence between cpp and R")
+
+
+```
+
+
+Compare then total annual incidence mean values (averaged over all seeds) for the outcomes, costs and qaly.
+
+```{r}
+
+# Cpp stuff post processing 
+load(file = here("data", "cpp_model_output", "outcomes_all.RDS"))
+programmes <- df_outcomes$health_outcomes %>% pull(inter) %>% unique
+
+df_cpp_plot <- df_outcomes$health_outcomes %>%
+    filter(effects == "total") %>%
+    group_by(seed, metric, inter) %>%
+    summarise(value = sum(value)) %>%
+    mutate(type = "cpp") %>%
+    ungroup %>% group_by(metric, inter, type) %>% summarise(value = mean(value)) %>%
+    dplyr::select(outcome = metric, value, programme = inter, type)
+
+df_cpp_qaly <- df_outcomes$econ_outcomes %>%
+  filter(metric == "QALYs", effects == "total") %>%
+  group_by(effects, metric, inter) %>%
+  summarise(value = mean(value)) %>% ungroup %>%
+  dplyr::select(metric, inter, value) %>% mutate(type = "cpp")
+
+df_cpp_costT <- df_outcomes$econ_outcomes %>%
+  filter(metric == "Cost (treatment)", effects == "total") %>%
+  group_by(effects, metric, inter) %>%
+  summarise(value = mean(value)) %>% ungroup %>%
+  dplyr::select(metric, inter, value) %>% mutate(type = "cpp")
+
+df_cpp_costA <- df_outcomes$econ_outcomes %>%
+  filter(metric == "Cost (prophylactics)", effects == "total") %>%
+  group_by(effects, metric, inter) %>%
+  summarise(value = mean(value)) %>% ungroup %>%
+  dplyr::select(metric, inter, value) %>% mutate(type = "cpp")
+
+#load(file = here("data", "inter_model_output", "inter_all_outcome.RData") )# outcomes_all
+#load(file = here("data", "inter_model_output", "inter_all_econ.RData") )# econmetric_alll
+load(file = here::here("data", "inter_model_output", "all_prog_sim.RData")) # outputs
+
+#post process results of simualtion
+df_R_plot_list <- list()
+df_R_qaly_list <- list()
+df_R_cost_treat_list <- list()
+df_R_cost_admin_list <- list()
+
+for (i in 1:16) {
+  df_R_plot_list[[i]] <- outputs[[i]]$outcomes_week_age %>%
+    group_by(outcome, time, age_group) %>%
+    summarise(incidence = mean(incidence)) %>%
+    group_by(outcome) %>%
+    summarise(incidence = sum(incidence)) %>%    
+    mutate(outcome = case_when(
+        outcome == "all_cases"~"All cases",
+        outcome == "symptomatic_cases"~"Symptomatic cases",
+        outcome == "gp_visits"~"GP visits",
+        outcome == "bed_days"~"Bed days",
+        outcome == "hospital_cases"~"Hospitalised cases",
+        outcome == "deaths"~"Deaths"
+        )) %>%
+      mutate(programme = programmes[i], type = "R") %>% rename(value = incidence)
+
+    df_R_qaly_list[[i]] <- outputs[[i]]$QALY %>%
+      filter(metric == "total", type == "discounted") %>%
+      group_by(type, metric) %>%
+      summarise(value = mean(value)) %>%
+      dplyr::select(metric, value) %>%
+      mutate(programme = programmes[i], type = "R") %>% rename(inter = programme)
+
+    df_R_cost_treat_list[[i]] <- outputs[[i]]$cost %>%
+      filter(metric == "direct", type == "discounted") %>%
+      group_by(type, metric) %>%
+      summarise(value = mean(value)) %>%
+      dplyr::select(metric, value) %>%
+      mutate(programme = programmes[i], type = "R") %>% rename(inter = programme)
+
+    df_R_cost_admin_list[[i]] <- outputs[[i]]$cost %>%
+      filter(metric == "inter", type == "discounted") %>%
+      group_by(type, metric) %>%
+      summarise(value = mean(value)) %>%
+      dplyr::select(metric, value) %>%
+      mutate(programme = programmes[i], type = "R") %>% rename(inter = programme)
+}
+
+df_R_plot <- bind_rows(df_R_plot_list)
+df_R_qaly <- bind_rows(df_R_qaly_list)
+df_R_cost_treat <- bind_rows(df_R_cost_treat_list)
+df_R_cost_admin <- bind_rows(df_R_cost_admin_list)
+
+output_compare_inci <- bind_rows(df_cpp_plot, df_R_plot) %>%
+    filter(outcome %in% c("Symptomatic cases", "GP visits", "Hospitalised cases", "Bed days", "Deaths"))
+
+
+output_compare_qaly <- bind_rows(df_cpp_qaly, df_R_qaly)
+output_compare_treat <- bind_rows(df_cpp_costT, df_R_cost_treat)
+output_compare_admin <- bind_rows(df_cpp_costA, df_R_cost_admin)
+
+p1 <- output_compare_inci %>% 
+    ggplot() + 
+      geom_point(aes(x = outcome, y = value, fill = type, color = type)) +
+      theme_minimal() + scale_y_continuous(trans = 'log2') +
+      labs(x = "Outcome", y = "Value", fill = "Type", title = "Health outcomes")
+
+p2 <- output_compare_qaly %>% 
+    ggplot() + 
+      geom_point(aes(x = inter, y = value, fill = type, color = type)) +
+      theme_minimal() +
+      labs(x = "Outcome", y = "Value", fill = "Type", title = "Health outcomes")
+
+p3 <- output_compare_treat %>% 
+    ggplot() + 
+      geom_point(aes(x = inter, y = value, fill = type, color = type)) +
+      theme_minimal() +
+      labs(x = "Outcome", y = "Value", fill = "Type", title = "Cost of treatment")
+
+p4 <- output_compare_admin %>% 
+    ggplot() + 
+      geom_point(aes(x = inter, y = value, fill = type, color = type)) +
+      theme_minimal() +
+      labs(x = "Outcome", y = "Value", fill = "Type", title = "cost of administration")
+
+```

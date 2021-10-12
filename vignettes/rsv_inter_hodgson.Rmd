@@ -1,36 +1,35 @@
 ---
-title: "rsv_inter_ew"
+title: "rsv_inter_R"
 author: "David Hodgson"
 date: "24/09/2020"
 output: html_document
 ---
 
+This is an R-based implementation of the cpp code used in Hodgson et al. 2021
 
 # 1. Setup 
-# 1.1 Import libraries
-May need to downoad all of these (use install.packages)
+## 1.1 Import libraries
+May need to downoad all of these (use install.packages).
+
 ```{r libraries}
 
-library(Rcpp)       # For c++ intergration
-library(RcppEigen)  # Ditto
-library(coda)       # Ditto
+library(Rcpp)
+library(RcppEigen) 
+library(coda) 
 library(tidyverse)
 library(parallel)
 library(MASS)
 library(foreach)
 library(gridExtra)
 library(doParallel)
-library(BayesianTools)
 library(devtools)
 library(here)
 library(patchwork)
-source( here::here("src", "helpers.R")) #ensure c++14 is enabled
 
 ```
 
 
-## 2 Import data for the epidemic model intervention model
-### 2.1 RunIntervention class
+## 1.2 Import data for the epidemic model intervention model
 
 This section calls a class from the cpp module inteface (RunInterventions.cpp) for the cpp intervention model (defined in RunInterventions.h).
 Then, using demographic data from the UK (ukdata) and model data needed for the intervention programmes (data_inter_uk), the intervention model class is initialised and ready to use! 
@@ -39,8 +38,8 @@ Then, using demographic data from the UK (ukdata) and model data needed for the 
 
 sourceCpp(here("src", "RunInterventions.cpp")) # Uploads empty RunInterventions class
 source(here("R", "RunInterventionsClass.R")) # Uploads emmake_RunInterventionspty function
-burnin_yrs <- 2
-run_yrs <- 10
+burnin_yrs <- 2 # two year burn-in
+run_yrs <- 10 # 10-year run
 
 # Load premade datasets
 load(file = here::here("data", "inter_model_input", "rsv_data_uk.RData")) # loads ukdata
@@ -50,22 +49,24 @@ classRunInterventions <- make_RunInterventions(RunInterventions, ukdata, data_in
 
 ```
 
-# 3. Code to run the intervention programmes from Hodgson et al. 
-There are 15 intervention programmes which are run altogether. 
+# 2. Code to run the intervention programmes from Hodgson et al. 
+## 2.1 Get the descriptions of the 16 programes.
+
+This section saves all the infomation needed to run the 16 intevention progammes in `data/inter_model_input/hodgson_programmes.RData` 
 
 ```{r}
 
 # Load relevant R scripts
-source("R/vac_cal.R") # generates the vaccination calendars
-source("R/calc_outcomes.R") # calculate the outcomes
-source("R/remake_hodgson.R") # defined parameters for hodgson et al. 2020 models
-# Load posteriors
+source("R/vac_cal.R")         # Generates the vaccination calendars
+source("R/calc_outcomes.R")   # Calculate the outcomes
+source("R/remake_hodgson.R")  # Vaccination specifics for hodgson et al.
 load(here("data", "inter_model_output", "posteriors.Rda")) # posteriors from fitting in Hodgson et al. 2020
-# Load seeds
+
+# Load seed values
 seeds <- read.csv(here("data", "inter_model_input", "seed_samples.csv"), header = FALSE)[, 1] + 1
 seed_len <- seq_len(1249)
+vac_par_info <- list(om_mab = 1 / 250, direct = FALSE, xi_boost = 1)
 
-# Get samples for all the efficacies
 all_eff <- list(
   pal_eff = rweibull(length(seed_len), 12.4311, 0.772251),
   mab_eff = rweibull(length(seed_len), 11.8975, 0.7317),
@@ -73,112 +74,31 @@ all_eff <- list(
   mat_eff = rweibull(length(seed_len), 3.32676, 0.461343)
 )
 
-# Get the intervention programmes names
-load(here::here("data", "cpp_model_output", "outcomes_all.RDS")) 
-programmes <- df_outcomes$health_outcomes %>% pull(inter) %>% unique
-
-# Information about the models
-vac_par_info <- list(om_mab = 1 / 250, direct = FALSE, xi_boost = 1)
-
-# run programmes and get annual estimates only (all outcomes it becomes a bit big)
-outcomes <- list(); econmetric <- list();
-for(prog in 1:15) {
-  econmetric_list <- list(); outcomes_list <- list(); i <- 1;
-  for (seed in seeds[1:100]) {
-    vac_cal <- create_calendars_hodgson(prog, seed, all_eff, "cal")
-    vac_dose <- create_calendars_hodgson(prog, seed, all_eff, "dose")
-    out <- classRunInterventions$Sample(vac_cal[["out"]], vac_dose[["out"]], vac_cal[["cov_c"]],
-      vac_par_info, as.matrix(post)[seed, ])
-    outcomes_cea <- get_outcomes(out, as.matrix(post)[seed, ], seed, 0.035)
-    
-    outcomes_list[[i]] <- outcomes_cea$outcomes
-    econmetric_list[[i]] <- outcomes_cea$econ
-    cat("sample_no: ", i, "\n"); i <- i + 1;
-  }
-
-  outcomes[[prog]] <- outcomes_list %>% bind_rows %>%
-    pivot_longer(everything(), values_to = "number", names_to = "outcome") %>%
-    mutate(programme = programmes[prog]) %>% arrange(programme, outcome)
-  econmetric[[prog]] <- econmetric_list %>% bind_rows %>%
-    pivot_longer(everything(), values_to = "number", names_to = "outcome") %>%
-    mutate(programme = programmes[prog]) %>% arrange(programme, outcome)
-}
-
-outcomes_all <- outcomes %>% bind_rows
-econmetric_all <- econmetric %>% bind_rows
-
-save(outcomes_all, file = here("data", "inter_model_output", "inter_all_outcome.RData") )
-save(econmetric_all, file = here("data", "inter_model_output", "inter_all_econ.RData") )
+# Create calendars and save
+create_calendars_hodgson(all_eff)
 
 ```
 
-
-# 4. Comparative metrics, R versions v.s. cpp versions
-Compare the outputs of the R implementation and the original cpp version to check for consistency.
+# 3. Run the 16 intervention programmes
 
 ```{r}
 
-load(file = here("data", "cpp_model_output", "outcomes_all.RDS"))
-load(file = here("data", "inter_model_output", "inter_all_outcome.RData") )# outcomes_all
-load(file = here("data", "inter_model_output", "inter_all_econ.RData") )# econmetric_all
+# Load relevant R scripts
+source("R/vac_cal.R") # generates the vaccination calendars
+source("R/calc_outcomes.R") # calculate the outcomes
+load(here("data", "inter_model_output", "posteriors.Rda")) # posteriors from fitting in Hodgson et al. 2020
+seeds <- read.csv(here("data", "inter_model_input", "seed_samples.csv"), header = FALSE)[, 1] + 1 # load seeds
+load( file = here::here("data", "inter_model_input", "hodgson_programmes.RData")) # load all_info
 
-programmes <- df_outcomes$health_outcomes %>% pull(inter) %>% unique 
+prog_names <- names(all_info$programmes)
+all_programmes <- all_info$programmes
+cov_c <- all_info$mat_cov
+outputs <- vector(mode = "list", length = length(prog_names))
 
-for (p in 1:15) {
-  ## Get the outcomes
-  # for cpp versions
-  cpp_versions <- df_outcomes$health_outcomes %>%
-    filter(inter == programmes[p], effects == "total") %>%
-    group_by(seed, metric, inter) %>%
-    summarise(value = sum(value)) %>%
-    mutate(type = "cpp") %>%
-    ungroup %>%
-    dplyr::select(outcome = metric, value, programme = inter, type)
-
-  # R versions
-  R_versions <- outcomes_all %>% filter(programme ==  programmes[p]) %>%
-    mutate(type = "R") %>%
-    rename(value = number) %>%
-    mutate(outcome = case_when(
-      outcome == "symp_tot"~"Symptomatic cases",
-      outcome == "gp_tot"~"GP visits",
-      outcome == "bd_tot"~"Bed days",
-      outcome == "hosp_tot"~"Hospitalised cases",
-      outcome == "death_tot"~"Deaths"
-      ))
-  output_compare_out <- bind_rows(cpp_versions, R_versions) %>%
-    filter(outcome %in% c("Symptomatic cases", "GP visits", "Hospitalised cases", "Bed days", "Deaths"))
-
-  p1 <- output_compare_out %>% 
-    ggplot() + 
-      geom_boxplot(aes(x = outcome, y = value, fill = type)) +
-      theme_minimal() + scale_y_continuous(trans='log2') +
-      labs(x = "Outcome", y = "Value", fill = "Type", title = "Health outcomes")
-
-  ## Get the econs
-  cpp_versions <- df_outcomes$econ_outcomes %>%
-    filter(inter == programmes[p], effects == "total") %>%
-    mutate(type = "cpp") %>%
-    dplyr::select(outcome = metric, value, programme = inter, type)
-  R_versions <- econmetric_all %>%
-    filter(programme ==  programmes[p]) %>%
-    mutate(type = "R") %>%
-    rename(value = number) %>%
-    mutate(outcome = case_when(
-      outcome == "costP"~"Cost (treatment)",
-      outcome == "costA"~"Cost (prophylactics)",
-      outcome == "QALY"~"QALYs",
-      ))
-  output_compare_econ <- bind_rows(cpp_versions, R_versions)
-
-  p2 <- output_compare_econ %>% 
-    ggplot() + 
-      geom_boxplot(aes(x = outcome, y = value, fill = type)) +
-      theme_minimal() + scale_y_continuous(trans='log2') +
-      labs(x = "Outcome", y = "Value", fill = "Type", title = "Economic outcomes")
-
-  p1 / p2 + plot_annotation(title = programmes[p])
-  ggsave(here("figs", "compare_r_cpp", paste0(programmes[p], ".pdf")))
+for (i in 1:16) {
+  outputs[[i]] <- run_sample_custom(seeds[1:100], all_programmes[[prog_names[i]]], vac_par_info, cov_c[i], post)
 }
+
+save(outputs, file = here::here("data", "inter_model_output", "all_prog_sim.RData"))
 
 ```

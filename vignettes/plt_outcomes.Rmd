@@ -7,7 +7,7 @@ library(patchwork) # for plotting
 ```
 
 
-Below is an example script which plots all the incidence of each outcome per age group for each intervention
+Below is an example script which plots all the incidence of each outcome per age group for each intervention programme for the cpp model
 
 ```{r}
 
@@ -53,5 +53,45 @@ p_rel <- seq_len(length(outcomes_plt)) %>%
 )
 
 wrap_plots(p_rel) + plot_annotation(title = paste0("Proportional cases for intervention: ", intervention_plt))
+
+```
+
+
+Below is an example script which plots all the incidence of each outcome per age group for each intervention programme for the cpp model
+
+```{r}
+
+# Load R simualtions and name the lists
+#
+# Load the R simualtions of the Hodgson et al model
+load(here::here("data", "inter_model_output", "all_prog_sim.RData")) # outputs
+# Load all the info about the vaccination progammes, only using this for the names of the programmes
+load(here::here("data", "cpp_model_output", "outcomes_all.RDS")) # df_outcomes
+prog_names <- df_outcomes$health_outcomes$inter %>% levels 
+# Name all the R simulations
+names(outputs) <- prog_names
+
+# Get annual incidence averaged over all seeds
+annual_inci <- outputs[["NONE"]]$outcomes_week_age %>%
+    group_by(outcome, time, age_group) %>%
+    summarise(incidence = mean(incidence)) %>%
+    group_by(outcome, age_group) %>%
+    summarise(incidence = sum(incidence)) %>% as.data.frame
+
+# Get the QALY loss values over the 10 year time horizon
+## cases = QALY loss due to non-healthcare seeking (symp - (GP + hosp)) cases and healthcare seeking cases (GP + hosp cases)
+## death = QALY loss due to death
+## total = cases + death
+qaly_th <- outputs[["NONE"]]$QALY %>%
+    group_by(type, metric) %>%
+    summarise(value = mean(value)) 
+
+# Get the cost values over the 10 year time horizon
+## direct = cost of treatment of all RSV cases from prospective of NHS (GP, beddays etc)
+## inter = cost of implementing the intervention programme
+## total = direct + inter
+cost_th <- outputs[["NONE"]]$cost %>%
+    group_by(type, metric) %>%
+    summarise(value = mean(value)) 
 
 ```
