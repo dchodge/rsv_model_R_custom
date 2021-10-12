@@ -1,4 +1,4 @@
-# Vignette for extracting the outcome data from the RSV model and plotting
+# 1. Vignette for extracting the outcome data from the RSV model and plotting
 
 ```{r}
 
@@ -7,7 +7,7 @@ library(patchwork) # for plotting
 ```
 
 
-Below is an example script which plots all the incidence of each outcome per age group for each intervention programme for the cpp model
+# 2. Below is an example script which plots all the incidence of each outcome per age group for each intervention programme for the cpp model
 
 ```{r}
 
@@ -57,7 +57,7 @@ wrap_plots(p_rel) + plot_annotation(title = paste0("Proportional cases for inter
 ```
 
 
-Below is an example script which plots all the incidence of each outcome per age group for each intervention programme for the cpp model
+# 3. Below is an example script which plots all the incidence of each outcome per age group for each intervention programme for the R model
 
 ```{r}
 
