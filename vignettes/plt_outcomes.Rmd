@@ -95,7 +95,7 @@ cost_th <- outputs[["NONE"]]$cost %>%
     summarise(value = mean(value)) 
 
 # Look at vacciantion calendar
-outputs[["NONE"]]$vac_cal # not very intervention of course
+outputs[["NONE"]]$vac_cal # not very interesting of course
 outputs[["MAB_ALL_S"]]$vac_cal # bit more interesting
 
 ```

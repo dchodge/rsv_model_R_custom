@@ -121,7 +121,6 @@ get_mat_calendar <- function(mat_info) {
         for(k in (8*7):(12*7)) {
             sero[(i + k - 1) %% 365 + 1, 1] <- sero[(i + k - 1) %% 365 + 1, 1] + dunif(k, 8 * 7, 12 * 7) * calendar[(i - 1) %% 365 + 1, 20] * mat_info$eff_inf * 365;
         }
-        
     }
     list(calendar = calendar, sero = sero)
 }
@@ -143,7 +142,7 @@ get_daily_uptake <- function(up_week_raw, start_time)
             
     for (i in 1:365) {
         pos_day <- (i - 1 + start_time) %% 365 + 1;
-        up_day[pos_day] <- (up_week[((i / 7 + start_time) %% 52) + 1] - up_week[((i/7 - 1 + start_time) %% 52) + 1]) / 7.0;
+        up_day[pos_day] <- (up_week[((i / 7 + start_time) %% 52) + 1] - up_week[((i / 7 - 1 + start_time) %% 52) + 1]) / 7.0;
         if (up_day[pos_day] < 0)
             up_day[pos_day] <- 0
     }
@@ -341,6 +340,8 @@ run_sample_custom <- function(seeds, func_vac, vac_par_info, cov_c, post) {
         QALY = bind_rows(QALY_list),
         cost = bind_rows(cost_list),
         outcomes_week_age = bind_rows(outcomes_week_age_list),
+        cal_pre = cal,
+        dose_pre = dose,
         vac_cal = out$doses
     )
   }

@@ -25,6 +25,7 @@ library(doParallel)
 library(devtools)
 library(here)
 library(patchwork)
+library(here)
 
 ```
 
@@ -100,5 +101,18 @@ for (i in 1:16) {
 }
 
 save(outputs, file = here::here("data", "inter_model_output", "all_prog_sim.RData"))
+
+```
+
+Check the intervention costs
+```{r}
+
+outputs[[10]]$vac_cal[1:52, 3] %>% sum # 251,161 doses a year for LAV
+outputs[[10]]$vac_cal[1:52, 1] %>% sum # 2128.624 doses a year Palivizumab
+
+outputs[[10]]$cost %>% filter(metric == "inter", type == "undiscounted") # cost is over 10 years £23828482
+251161 * 9 * 10 # 22604490 for LAV
+2128 * 54 * 10 # 1149120 for Palivizumab
+22604490 + 1149120 # 23753610 (similar to quoted cost)
 
 ```

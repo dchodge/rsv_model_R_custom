@@ -646,7 +646,6 @@ public:
                 x0[455*a + 72*6 + 3] = 0;
                 x0[455*a + 72*6 + 4] = 0;
             }
-
             this->weekNo++;
         }
         this->dayNoAfterBurn++;
@@ -703,9 +702,8 @@ public:
     double u18p;
     double u19p;
     double u20p;
-    double cov_c_t;
     
-  ODE_desc(RunInterventions* finELL_t, List vac_calendar_t, List vac_dose_t, List vac_info_t, double cov_c): finELL(finELL_t), vac_calendar(vac_calendar_t), vac_dose(vac_dose_t), vac_info(vac_info_t), cov_c(cov_c_t){
+  ODE_desc(RunInterventions* finELL_t, List vac_calendar_t, List vac_dose_t, List vac_info_t, double cov_c_t): finELL(finELL_t), vac_calendar(vac_calendar_t), vac_dose(vac_dose_t), vac_info(vac_info_t), cov_c(cov_c_t){
 
         xi = 1.0/finELL->parameterValues["xi"];
         si = 1.0/finELL->parameterValues["si"];
@@ -782,7 +780,6 @@ public:
         cal_LAV_LR_dose = vac_dose["LAV_LR"];
         vac_cal_dose = vac_dose["mat_LR"];
       
-        cov_c = cov_c;
         direct = vac_info["direct"];
         om_mab = vac_info["om_mab"];
         xi_boost = vac_info["xi_boost"];
@@ -1409,7 +1406,7 @@ List RunInterventions::Sample(List vac_calendar, List vac_dose, double cov_c, Li
   asc::Recorder recorder;
   vector< double >  x0 = generateInitialStates(cov_c);
   ODE_desc ODE_desc_inst(this, vac_calendar, vac_dose, vac_info, cov_c);
-// 573
+
     NumericMatrix sampleWeeklyIncidence(521, this->A*9);
     NumericMatrix no_doses(521, 4);
 
