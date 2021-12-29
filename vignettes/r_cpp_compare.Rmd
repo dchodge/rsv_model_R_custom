@@ -169,7 +169,7 @@ output_compare_admin <- bind_rows(df_cpp_costA, df_R_cost_admin)
 p1 <- output_compare_inci %>% 
     ggplot() + 
       geom_point(aes(x = outcome, y = value, fill = type, color = type)) +
-      theme_minimal() + scale_y_continuous(trans = 'log2') +
+      theme_minimal() + #scale_y_continuous(trans = 'log2') +
       labs(x = "Outcome", y = "Value", fill = "Type", title = "Health outcomes")
 
 p2 <- output_compare_qaly %>% 

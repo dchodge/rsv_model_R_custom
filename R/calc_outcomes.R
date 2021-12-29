@@ -428,12 +428,12 @@ get_Costs <- function(gp, bd, doses_w, seed) {
 #' @param seed integer value
 #' @param r discount rate (default is 0.035)
 #' @return list of two dataframes, once detailing the health outcomes, one the economic outcomes
-get_outcomes <- function(outputs, posterior, seed, r = 0.035) {
+get_outcomes <- function(outputs, posterior, cost_imp, discount_rate, seed, disease_mult) {
     inci <- outputs$inci
     doses <- outputs$doses
 
-    undiscount_qaly <- undiscount_cost <- list(0, 0, 0)
-    discount_qaly <- discount_cost <- list(0, 0, 0)
+    undiscount_qaly <- undiscount_cost <- list(rep(0, 25), rep(0, 25), rep(0, 25), rep(0, 25))
+    discount_qaly <- discount_cost <- list(rep(0, 25), rep(0, 25), rep(0, 25), rep(0, 25))
 
     QALY <- 0
     costP <- 0
@@ -463,28 +463,28 @@ get_outcomes <- function(outputs, posterior, seed, r = 0.035) {
         }
 
         undiscount_qaly_tw <- get_QALY(symp$incidence, gp$incidence, hosp$incidence, bd$incidence, death$incidence, seed)
-        discount_qaly_tw <- undiscount_qaly_tw %>% map(~.x * exp(-(t_w - 1) * 0.035 / 52.0))
+        discount_qaly_tw <- undiscount_qaly_tw %>% map(~.x * exp(-(t_w - 1) * discount_rate / 52.0))
         undiscount_qaly <- ((1:3 %>% map(~undiscount_qaly[[.x]] + undiscount_qaly_tw[[.x]])) %>% setNames(c("qaly_cases", "qaly_death", "qaly_total")))
         discount_qaly <- ((1:3 %>% map(~discount_qaly[[.x]] + discount_qaly_tw[[.x]])) %>% setNames(c("qaly_cases", "qaly_death", "qaly_total")))
         
         undiscount_cost_tw <- get_Costs(gp$incidence, bd$incidence, doses[t_w, ], seed)
-        discount_cost_tw <- undiscount_cost_tw %>% map(~.x * exp(-(t_w - 1) * 0.035 / 52.0))
+        discount_cost_tw <- undiscount_cost_tw %>% map(~.x * exp(-(t_w - 1) * discount_rate / 52.0))
         undiscount_cost <- ((1:3 %>% map(~undiscount_cost[[.x]] + undiscount_cost_tw[[.x]])) %>% setNames(c("cost_direct", "cost_inter", "cost_total")))
         discount_cost <- ((1:3 %>% map(~discount_cost[[.x]] + discount_cost_tw[[.x]])) %>% setNames(c("cost_direct", "cost_inter", "cost_total")))
 
     }
     QALY <- data.frame(
         seed = seed,
-        type = c(rep("undiscounted", 3), rep("discounted", 3)),
-        metric = c(rep("cases", 1), rep("deaths", 1), rep("total", 1), rep("cases", 1), rep("deaths", 1), rep("total", 1)),
+        type = c(rep("undiscounted", 75), rep("discounted", 75)),
+        metric = c(rep("cases", 25), rep("deaths", 25), rep("total", 25), rep("cases", 25), rep("deaths", 25), rep("total", 25)),
         value = c(undiscount_qaly$qaly_cases, undiscount_qaly$qaly_death, undiscount_qaly$qaly_total,
             discount_qaly$qaly_cases, discount_qaly$qaly_death, discount_qaly$qaly_total)
     )
     
     cost <- data.frame(
         seed = seed,
-        type = c(rep("undiscounted", 3), rep("discounted", 3)),
-        metric = c(rep("direct", 1), rep("inter", 1), rep("total", 1), rep("direct", 1), rep("inter", 1), rep("total", 1)),
+        type = c(rep("undiscounted", 75), rep("discounted", 75)),
+        metric = c(rep("direct", 25), rep("inter", 25), rep("total", 25), rep("direct", 25), rep("inter", 25), rep("total", 25)),
         value = c(undiscount_cost$cost_direct, undiscount_cost$cost_inter, undiscount_cost$cost_total,
             discount_cost$cost_direct,  discount_cost$cost_inter, discount_cost$cost_total)
     )
@@ -493,5 +493,4 @@ get_outcomes <- function(outputs, posterior, seed, r = 0.035) {
         cost = cost,
         outcomes_age_week = outcomes_age_week
     )
- 
 }

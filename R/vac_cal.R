@@ -314,10 +314,9 @@ get_dose <- function(output) {
 #' @param vac_par_info A list of values which help define the intervention programmes
 #' @param cov_c The proportion of infants who are in the targeted group (equal to the coverage of maternal vaccination.)
 #' @return A list of two dataframes, the first shows the annual incidence for health outcomes, the second shows the economic metrics.
-run_sample_custom <- function(seeds, func_vac, vac_par_info, cov_c, post) {
+run_sample_custom <- function(seeds, func_vac, vac_par_info, cov_c, post, cost_imp, discount_rate = 0.03, disease_mult = 1) {
     QALY_list <- list(); cost_list <- list();
-    outcomes_week_age_list <- list(); 
-    i <- 1;
+    outcomes_month_age_list <- list(); econmetric_list <- list(); outcomes_annual_list <- list(); i <- 1;
     for (seed in seeds) {
     
       vac_program_info_custom <- func_vac(seed)
@@ -327,21 +326,20 @@ run_sample_custom <- function(seeds, func_vac, vac_par_info, cov_c, post) {
       dose <- get_dose(vac_cal)
       out <- classRunInterventions$Sample(cal, dose, vac_cal[["cov_c"]],
         vac_par_info, as.matrix(post)[seed, ])
-      outcomes_cea <- get_outcomes(out, as.matrix(post)[seed, ], seed, 0.035)
+      outcomes_cea <- get_outcomes(out, as.matrix(post)[seed, ], cost_imp, discount_rate, seed, disease_mult)
       
       QALY_list[[i]] <- outcomes_cea$QALY
       cost_list[[i]] <- outcomes_cea$cost
-      outcomes_week_age_list[[i]] <- outcomes_cea$outcomes_age_week
+      outcomes_month_age_list[[i]] <- outcomes_cea$outcomes_age_month
 
       cat("sample_no: ", i, "\n"); i <- i + 1;
     }
-    colnames(out$doses) <- c("pal", "mab", "lav", "mat")
     list(
         QALY = bind_rows(QALY_list),
         cost = bind_rows(cost_list),
-        outcomes_week_age = bind_rows(outcomes_week_age_list),
+        outcomes_month_age = bind_rows(outcomes_month_age_list),
+        vac_cal = out$doses,
         cal_pre = cal,
-        dose_pre = dose,
-        vac_cal = out$doses
+        dose_pre = dose
     )
-  }
+}

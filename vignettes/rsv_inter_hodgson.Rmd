@@ -97,7 +97,7 @@ cov_c <- all_info$mat_cov
 outputs <- vector(mode = "list", length = length(prog_names))
 
 for (i in 1:16) {
-  outputs[[i]] <- run_sample_custom(seeds[1:100], all_programmes[[prog_names[i]]], vac_par_info, cov_c[i], post)
+  outputs[[i]] <- run_sample_custom(seeds[1:1000], all_programmes[[prog_names[i]]], vac_par_info, cov_c[i], post)
 }
 
 save(outputs, file = here::here("data", "inter_model_output", "all_prog_sim.RData"))

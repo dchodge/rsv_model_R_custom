@@ -382,8 +382,6 @@ public:
     
     // Defined later but of size A
     double currentODETime;
-
-    
     double run_start, run_burn, run_full, dt;
 
     RunInterventions(double dailyBirthRate_t, double totPopulation_t, NumericVector ageStratification_t): dailyBirthRate(dailyBirthRate_t), totPopulation(totPopulation_t), ageStratification(ageStratification_t){
@@ -403,14 +401,12 @@ public:
             currentODETime = 0;
             dayNoAfterBurn = 0;
             valueLogLikelihood = 0;
-                   
     }
     
     vector<double > pVHR;
     vector<double > pHR;
     vector<double > pLR;
     
-
     // Related to parameter values
     NumericVector parameterValues;
     
@@ -1187,7 +1183,6 @@ public:
                   
                   if (s < 3)
                   {
-                 //     Rcpp::Rcout << "Place where s < 3." << std::endl;
 
                       cpmu = 0; cpmu_dose = 0;
                       cpo = 0; cpo_dose = 0;
@@ -1201,7 +1196,6 @@ public:
                   }
                   else
                   {
-                     // Rcpp::Rcout << "Place where s >= 3." << std::endl;
 
                       lossP = x[a*ag + s*sg + r*rg + 21]*(1.0/60.0);
                       lossMS0 = x[a*ag + s*sg + r*rg + 22]*(om_mab);
@@ -1287,7 +1281,6 @@ public:
                       }
                   }
                   
-             //     Rcpp::Rcout << "Just before ODES, some book keeping" << std::endl;
                   for (int i = 0; i < 21; i++)
                   {
                       x_tot += x[o+i];
@@ -1307,7 +1300,6 @@ public:
                   protectmabs += cMo_dose*x_tot;
                   protectLAV += cLo_dose*x_tot;
                   protectmat += cMa_dose*x_tot;
-               //   Rcpp::Rcout << "actual odes" << std::endl;
 
                   dxdt[p+0] = (1.0-p_vul)*mu*rp + mu_mat*rp - x[p+0]*xi*xi_b - (x[p+0])*ej1 + PS[0]*ej*rp*u - x[o+0]*(cMo) - x[o+0]*(cpo);
                   
