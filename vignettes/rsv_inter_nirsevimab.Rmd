@@ -1,0 +1,340 @@
+---
+title: "rsv_inter_ew"
+author: "David Hodgson"
+date: "24/09/2020"
+output: html_document
+---
+
+
+# 1. Setup 
+# 1.1 Import libraries
+May need to downoad all of these (use install.packages)
+```{r libraries}
+
+library(Rcpp)       # For c++ intergration
+library(RcppEigen)  # Ditto
+library(coda)       # Ditto
+library(tidyverse)
+library(parallel)
+library(MASS)
+library(foreach)
+library(gridExtra)
+library(doParallel)
+library(BayesianTools)
+library(devtools)
+library(here)
+library(patchwork)
+#source( here::here("src", "helpers.R")) #ensure c++14 is enabled
+
+```
+
+
+## 2 Import data for the epidemic model intervention model
+### 2.1 RunIntervention class
+
+This section calls a class from the cpp module inteface (RunInterventions.cpp) for the cpp intervention model (defined in RunInterventions.h).
+Then, using demographic data from the UK (ukdata) and model data needed for the intervention programmes (data_inter_uk), the intervention model class is initialised and ready to use! 
+
+```{r}
+
+sourceCpp(here("src", "RunInterventions.cpp")) # Uploads empty RunInterventions class
+source(here("R", "RunInterventionsClass.R")) # Uploads emmake_RunInterventionspty function
+burnin_yrs <- 2
+run_yrs <- 10
+
+# Load premade datasets
+load(file = here::here("data", "inter_model_input", "rsv_data_uk.RData")) # loads ukdata
+load(file = here::here("data", "inter_model_input", "inter_data_uk.RData")) # loads data_inter_uk
+
+classRunInterventions <- make_RunInterventions(RunInterventions, ukdata, data_inter_uk, burnin_yrs * 365, run_yrs * 365)
+
+```
+
+# 3. Code to run custom RSV intervention programmes
+
+Three examples of how to implement your own custom calendars are given below. 
+
+```{r}
+
+source(here("R", "run_scripts.R")) # Uploads emmake_RunInterventionspty function
+make_data_list()
+
+```
+
+## 4. Code to run just to get weekly outcomes by age group
+
+```{r}
+
+source(here("R", "calc_outcomes.R")) # Uploads emmake_RunInterventionspty function
+source(here("R", "vac_cal.R")) # Uploads emmake_RunInterventionspty function
+source(here("R", "run_scripts.R")) # Uploads emmake_RunInterventionspty function
+
+
+load(file = here::here("outputs", "nirsevimab", "data_list.RData")) # data_list
+run_model_base(data_list)
+run_model_base_direct(data_list)
+
+# Calcualte ICERs
+run_icer_base(20000, "base_icer")
+run_icer_base(15000, "lower_icer")
+
+```
+
+## Look at estimating the dominance from these programmes
+
+```{r}
+
+source("R/cea.R")
+
+load(file = here("outputs", "nirsevimab", "impact", "none.RData")) # output_default_none
+load(file = here("outputs", "nirsevimab", "impact", "status_quo_base.RData")) # output_default_base
+load(file = here("outputs", "nirsevimab", "impact", "output_season_vhr_base.RData")) # output_season_vhr_base
+load(file = here("outputs", "nirsevimab", "impact", "output_season_base.RData")) # output_season_base
+load(file = here("outputs", "nirsevimab", "impact", "output_yr_base.RData")) # output_yr_base
+load(file = here("outputs", "nirsevimab", "impact", "output_season_catchup_base.RData")) # output_season_catchup_base
+load(file = here("outputs", "nirsevimab", "impact", "output_season_catchup_nip_base.RData")) # output_season_catchup_nip_base
+
+get_cea_plane_info <- function(none, output, name) {
+  pal_cost <- 4035.50
+
+  mean_QALY_none <- none$QALY %>% filter(type == "discounted", metric == "total") %>% unique %>% pull(value) %>% mean(na.rm = TRUE) # qaly loss
+  mean_cost_treat_none <- none$cost %>% filter(type == "discounted", metric == "total") %>% unique %>% pull(value) %>% mean(na.rm = TRUE)  # cost of treatment
+
+  mean_QALY <- output$QALY %>% filter(type == "discounted", metric == "total") %>% unique %>% pull(value) %>% mean(na.rm = TRUE) # qaly loss
+  mean_cost_treat <- output$cost %>% filter(type == "discounted", metric == "total") %>% unique %>% pull(value) %>% mean(na.rm = TRUE)  # cost of treatment
+  mean_cost_ad <- (output$vac_cal[, 1] * pal_cost * exp(-(1:521 - 1) * 0.035 / 52.0)) %>% sum # cost of pal programmes
+  doses <- (output$vac_cal[, 2] * exp(-(1:521 - 1) * 0.035 / 52.0)) %>% sum # number of doses of mabs given
+
+  data.frame(
+    strategy = name,
+    QALY = mean_QALY_none - mean_QALY,
+    cost = (mean_cost_treat + mean_cost_ad) - mean_cost_treat_none,
+    doses = doses
+  )
+}
+
+outputs <- list(output_season_vhr_base, output_season_base, output_yr_base, output_season_catchup_base, output_season_catchup_nip_base)
+names <- list("vhr", "season", "year-round", "season + cathcup", "season + catchup + PID")
+icer_table <- map2(outputs, names, ~get_cea_plane_info(output_default_base, .x, .y)) %>% bind_rows
+
+plot_plane <- function(icer_table, ppd) {
+  icer_table_cal <- icer_table %>% mutate(cost_total = cost + doses * ppd)
+  icer_table_cal %>% 
+    ggplot() +
+      geom_point(aes(x = QALY, y = cost_total, color = strategy)) + 
+      theme_bw()
+     # geom_text(aes(x = QALY, y = cost_total, label = strategy))
+}
+
+plot_plane(icer_table, 30) # holds assuming price is at least £30
+
+```
+
+# Calculate purchasing price per dose
+```{r}
+
+# Sensitivity analysis
+run_model_mabs_dur(data_list) 
+run_icer_mabs_dur(20000)
+
+run_icer_coverage(data_list, 20000, 0.7)
+run_icer_coverage(data_list, 20000, 0.7)
+ind_mabs_2mo <- c(0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+run_icer_admin_year(datalist, 20000, ind_mabs_2mo)
+
+```
+
+# Calculate purchasing price per dose
+
+```{r}
+
+library(here)
+load(file = here("outputs", "nirsevimab", "impact", "base", "none.RData")) # output_default_none
+load(file = here("outputs", "nirsevimab", "impact", "base", "status_quo_base.RData")) # output_default_base
+load(file = here("outputs", "nirsevimab", "impact", "base", "output_season_vhr_base.RData")) # output_season_vhr_base
+load(file = here("outputs", "nirsevimab", "impact", "base", "output_season_base.RData")) # output_season_base
+load(file = here("outputs", "nirsevimab", "impact", "base", "output_yr_base.RData")) # output_yr_base
+load(file = here("outputs", "nirsevimab", "impact", "base", "output_season_catchup_base.RData")) # output_season_catchup_base
+load(file = here("outputs", "nirsevimab", "impact", "base", "output_season_catchup_nip_base.RData")) # output_season_catchup_nip_base
+
+get_new_data_frame <- function(df_outputs) {
+  df_outputs$outcomes_week_age %>%
+  group_by(outcome, seed) %>%
+  summarise(tot_inci = sum(incidence))
+}
+
+get_change <- function(base, inter, string) {
+
+  left_join(
+    get_new_data_frame(base) %>% rename(tot_inci_base = tot_inci),
+    get_new_data_frame(inter) %>% rename(tot_inci_output = tot_inci)
+  )  %>% mutate(inci_averted = (tot_inci_base - tot_inci_output) / tot_inci_base, type = string, .keep = "unused") %>%
+    filter(!is.na(inci_averted)) %>% as.data.frame
+}
+
+full_inter_outcomes <- bind_rows(
+  get_change(output_default_base, output_season_vhr_base, "VHR"),
+  get_change(output_default_base, output_season_base, "Seasonal"),
+  get_change(output_default_base, output_yr_base, "Year-round"),
+  get_change(output_default_base, output_season_catchup_base, "Seasonal + catchup"),
+  get_change(output_default_base, output_season_catchup_nip_base, "Season + pid catchup")
+) %>% mutate(type = factor(type, c("VHR", "Seasonal", "Year-round", "Seasonal + catchup", "Season + pid catchup"))) %>%
+  filter(outcome != "all_cases") %>%
+  mutate(outcome = factor(outcome, levels = c("symptomatic_cases", "gp_visits", "hospital_cases", "bed_days", "deaths"))) %>%
+  mutate(outcome = case_when(
+    outcome == "symptomatic_cases"~"Symptomatic cases",
+    outcome == "gp_visits"~"GP consultations",
+    outcome == "hospital_cases"~"Hospital cases",
+    outcome == "bed_days"~"Bed days",
+    outcome == "deaths"~"Deaths"
+  )
+  )
+
+require(ggdist)
+full_inter_outcomes %>%
+  ggplot() + 
+    stat_pointinterval(aes(y = outcome, x = inci_averted, color = outcome, point_fill = outcome), .width = c(0.95), size = 1,
+      shape = 21, point_color = "black", point_size = 2, point_alpha = 0.8) + 
+    facet_grid(rows = vars(type)) + 
+    labs(x = "Proportion of total cases averted", y = "Healthcare outcome") + theme(legend.position = "none")
+ggsave("outputs", "nirsevimab", "figs", "fig0a.pdf")
+
+```
+
+# Look athe indirect effects 
+```{r}
+
+
+
+```
+
+
+```{r}
+
+get_new_data_frame_age <- function(df_outputs) {
+  df_outputs$outcomes_week_age %>%
+    mutate(age_group_cat = case_when(
+      (age_group >= 1) & (age_group <= 6)~"<6 mo",
+      (age_group >= 7) & (age_group <= 12)~"6-11 mo",
+      (age_group >= 13) & (age_group <= 16)~"1-4 yrs",
+      (age_group >= 17) & (age_group <= 23)~"5-64 yrs",
+      (age_group >= 24) & (age_group <= 25)~"65+ yrs"
+      )) %>%
+    group_by(outcome, seed, age_group_cat) %>%
+    summarise(tot_inci = sum(incidence))
+}
+
+get_change <- function(base, inter, string) {
+  left_join(
+    get_new_data_frame(base) %>% rename(tot_inci_base = tot_inci),
+    get_new_data_frame(inter) %>% rename(tot_inci_output = tot_inci)
+  ) %>% mutate(inci_averted = (tot_inci_base - tot_inci_output), type = string, .keep = "unused") 
+}
+
+full_inter_outcomes_age <- bind_rows(
+  get_change(output_default_base, output_season_vhr_base, "vhr"),
+  get_change(output_default_base, output_season_base, "season"),
+  get_change(output_default_base, output_yr_base, "year round"),
+  get_change(output_default_base, output_season_catchup_base, "season catchup"),
+  get_change(output_default_base, output_season_catchup_nip_base, "season catchup + pid")
+)
+
+full_inter_outcomes <- full_inter_outcomes_age %>% 
+  group_by(outcome, seed, type) %>% summarise(inci_averted = sum(inci_averted))
+
+require(ggdist)
+full_inter_outcomes %>%
+  ggplot() + 
+    stat_pointinterval(aes(y = outcome, x = inci_averted)) + 
+    facet_grid(rows = vars(type))
+
+
+```
+
+
+# Run and plot stuff
+
+```{r}
+
+library(tidyverse)
+library(patchwork)
+base_icer_temp <- load(here::here("outputs", "nirsevimab", "icer", "base_icer.RData"))
+base_icer <- get(base_icer_temp) %>% mutate(icer_threshold = "20000")
+
+lower_icer_temp <- load(here::here("outputs", "nirsevimab", "icer", "lower_icer.RData"))
+lower_icer <- get(lower_icer_temp) %>% mutate(icer_threshold = "15000")
+
+icer <- bind_rows(base_icer, lower_icer) %>%
+  mutate(scale = case_when(names == "vhr"~2, names != "vhr"~1)) %>%
+  mutate(names = factor(names, levels = c("vhr", "seasonal", "seasonal_and_catchup", "seasonal_and_catchup_nip")))
+
+p1 <- icer %>% 
+  filter(names == "vhr") %>%
+  ggplot() + 
+    geom_boxplot(aes(x = names, y = ppd, fill = icer_threshold) )
+p2 <- icer %>% 
+  filter(names != "vhr") %>%
+  ggplot() + 
+    geom_boxplot(aes(x = names, y = ppd, fill = icer_threshold) )
+
+p1 + p2 + plot_layout(widths = c(1, 3), guides = "collect") & labs(x = "Progammes", y = "Price per dose to be cost-effective (£)", fill = "ICER threshold") &
+  theme_bw()
+ggsave(file = here::here("outputs", "nirsevimab", "figs", "fig1a.pdf"))
+
+p1 <- icer %>%
+  ggplot(aes(ppd, color = names, linetype = icer_threshold)) + 
+  geom_hline(yintercept = 0, ) + geom_hline(yintercept = 1) + 
+  geom_line(aes(y = 1 - ..y..), size = 1.5, 
+    alpha = 0.7, stat = 'ecdf') + 
+  scale_linetype_manual(values = c("dotted", "solid")) + 
+  facet_grid(cols = vars(scale), scales = "free_x") 
+
+g <- p1 + plot_layout(guides = "collect") &
+  labs(x = "Price per dose (£)", y = "Probability that programme is cost-effective", fill = "ICER threshold", 
+    linetype = "ICER threshold value (£/QALY)", color = "Intervention programme") &
+  theme_bw() + theme(
+    strip.background = element_blank(),
+    strip.text.x = element_blank()
+  )
+
+# plot result
+
+library(grid)
+gp <- ggplot_gtable(ggplot_build(g))
+facet.columns <- gp$layout$l[grepl("panel", gp$layout$name)]
+gp$widths[facet.columns] <- gp$widths[facet.columns] * c(2, 1)
+grid::grid.draw(gp)
+ggsave(file = here::here("outputs", "nirsevimab", "figs", "fig1b.pdf"))
+
+```
+
+
+## Fitting distributions
+```{r}
+
+library(tidyverse)
+fitdist_ci <- function(pars, data, dist) {
+    qs <- c(0.025, 0.5, 0.975); 1:3 %>% map_dbl(~ (dist(qs[.x],  pars[1], pars[2]) - data[.x])^2) %>% sum
+}
+
+fitdist_ci_g <- function(pars, data, dist) {
+    qs <- c(0.025, 0.5, 0.975); 1:3 %>% map_dbl(~ (dist(p = qs[.x], loc = pars[1], scale = pars[2]) - data[.x])^2) %>% sum
+}
+
+
+require(evd)
+eff_symp <- c(0.496, 0.745, 0.871)
+eff_hosp <- c(-0.086, 0.621, 0.868)
+
+par_fit_lnorm <- optim(c(10, 10), fitdist_ci, data = eff_symp, dist = qlnorm, method = "CG")
+par_fit_weibull <- optim(c(10, 10), fitdist_ci, data = eff_symp, dist = qweibull, method = "CG") # best fit
+par_fit_gamma <- optim(c(10, 10), fitdist_ci, data = eff_hosp, dist = qgamma, method = "CG")
+
+par_fit_beta <- optim(c(10, 10), fitdist_ci, data = eff_symp, dist = qbeta, method = "CG")
+hist(rbeta(1000,   12.453878,  6.942577) )
+
+par_fit_gumbel <- optim(c(0, 10), fitdist_ci_g, data = eff_hosp, dist = qgumbel)
+hist(rgamma(1000,   5.940192, 12.905101) )
+
+
+```

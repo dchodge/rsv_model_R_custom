@@ -48,14 +48,31 @@ get_mAB_calendar <- function(mab_info) {
            calendar[(i - 1) %% 365 + 1, j] <- mab_info$age_id[j] * mab_info$cov / 30.0
         }
     }
-        if (mab_info$catchup) {
+    if (mab_info$catchup) {
         for (i in (mab_info$t_start):(mab_info$t_start + 28)) {
             for (j in 1:25) {
                 calendar[(i - 1) %% 365 + 1, j] <- mab_info$age_id_catchup[j] * mab_info$cov / 30.0
             }
         }
     }
-    for (i in (mab_info$t_start):(mab_info$t_end )) {
+    if (mab_info$catchupnip) {
+        for (i in (13 * 7):(13 * 7 + 30)) {
+            for (j in 3:5) {
+                calendar[(i - 1) %% 365 + 1, j] <- 1 * mab_info$cov / 30.0
+            }
+        }
+        for (i in (9 * 7):(9 * 7 + 30)) {
+            calendar[(i - 1) %% 365 + 1, 5] <- 1 * mab_info$cov / 30.0
+        }
+        for (i in (4 * 7):(4 * 7 + 30)) {
+            calendar[(i - 1) %% 365 + 1, 5] <- 1 * mab_info$cov / 30.0
+        }        
+        for (i in (0 * 7):(0 * 7 + 30)) {
+            calendar[(i - 1) %% 365 + 1, 5] <- 1 * mab_info$cov / 30.0
+        }
+    }
+    
+    for (i in 0:365) {
         for (j in 1:25) {
            sero[(i - 1) %% 365 + 1, j] <- calendar[(i - 1) %% 365 + 1, j] * mab_info$eff;
         }
@@ -316,7 +333,7 @@ get_dose <- function(output) {
 #' @return A list of two dataframes, the first shows the annual incidence for health outcomes, the second shows the economic metrics.
 run_sample_custom <- function(seeds, func_vac, vac_par_info, cov_c, post, cost_imp, discount_rate = 0.03, disease_mult = 1) {
     QALY_list <- list(); cost_list <- list();
-    outcomes_month_age_list <- list(); econmetric_list <- list(); outcomes_annual_list <- list(); i <- 1;
+    outcomes_week_age_list <- list(); econmetric_list <- list(); outcomes_annual_list <- list(); i <- 1;
     for (seed in seeds) {
     
       vac_program_info_custom <- func_vac(seed)
@@ -330,14 +347,14 @@ run_sample_custom <- function(seeds, func_vac, vac_par_info, cov_c, post, cost_i
       
       QALY_list[[i]] <- outcomes_cea$QALY
       cost_list[[i]] <- outcomes_cea$cost
-      outcomes_month_age_list[[i]] <- outcomes_cea$outcomes_age_month
+      outcomes_week_age_list[[i]] <- outcomes_cea$outcomes_age_week
 
       cat("sample_no: ", i, "\n"); i <- i + 1;
     }
     list(
         QALY = bind_rows(QALY_list),
         cost = bind_rows(cost_list),
-        outcomes_month_age = bind_rows(outcomes_month_age_list),
+        outcomes_week_age = bind_rows(outcomes_week_age_list),
         vac_cal = out$doses,
         cal_pre = cal,
         dose_pre = dose
