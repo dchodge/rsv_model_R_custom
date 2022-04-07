@@ -83,6 +83,7 @@ make_data_list <- function() {
       seasonal_catchup_nip = make_vac_program_info_mabs_seasonal_catchup_nip,
       vac_par_info = vac_par_info,
       pal_eff = pal_eff,
+      mab_eff = mab_eff,
       post = post,
       seeds = seeds,
       S = 100
@@ -169,17 +170,17 @@ run_icer_mabs_dur <- function(datalist, threshold) {
 
   load(file = here("outputs", "nirsevimab", "impact", "base", "status_quo_base.RData")) # output_default_base
 
-  seeds <- data_list$seeds
-  post <- data_list$post
-  S <- data_list$S
+  seeds <- datalist$seeds
+  post <- datalist$post
+  S <- datalist$S
 
   vac_par_info_d_250 <- list(om_mab = 1 / 250, direct = FALSE, xi_boost = 1)
 
   output_season_vhr_d_250 <- run_sample_custom(seeds[1:S], datalist$vhr_seasonal, vac_par_info_d_250, 0, post)
-  output_season_d_250 <- run_sample_custom(seeds[1:S], datalist$mabs_seasonal, vac_par_info_d_250, 0, post)
+  output_season_d_250 <- run_sample_custom(seeds[1:S], datalist$seasonal, vac_par_info_d_250, 0, post)
   output_yr_d_250 <- run_sample_custom(seeds[1:S], datalist$year_round, vac_par_info_d_250, 0, post)
   output_season_catchup_d_250 <- run_sample_custom(seeds[1:S], datalist$seasonal_catchup, vac_par_info_d_250, 0, post)
-  output_season_catchup_nip_d_250 <- run_sample_custom(seeds[1:S], datalist$mabs_seasonal_catchup_nip, vac_par_info_d_250, 0, post)
+  output_season_catchup_nip_d_250 <- run_sample_custom(seeds[1:S], datalist$seasonal_catchup_nip, vac_par_info_d_250, 0, post)
 
   save(output_season_vhr_d_250, file = here("outputs", "nirsevimab", "impact", "mabs_dur", "output_season_vhr_d_250.RData"))
   save(output_season_d_250, file = here("outputs", "nirsevimab", "impact", "mabs_dur", "output_season_d_250.RData"))
@@ -189,17 +190,17 @@ run_icer_mabs_dur <- function(datalist, threshold) {
 
   list_outputs <- list(output_default_base, output_season_vhr_d_250, output_season_d_250,
     output_season_catchup_d_250, output_season_catchup_nip_d_250)
-  list_names <- list("d_250_mab_vhr_icer", "d_250_mab_icer",
-    "d_250_mab_catchup_icer", "d_250_mab_catchup_nip_icer")
+  list_names <-  list("vhr", "seasonal",
+    "seasonal_and_catchup", "seasonal_and_catchup_nip")
   ppd_d_250 <- cal_impact_standard(list_outputs, list_names, threshold)
   save(ppd_d_250, file = here::here("outputs", "nirsevimab", "icer", "d_250_icer.RData"))
 
   vac_par_info_d_360 <- list(om_mab = 1 / 360, direct = FALSE, xi_boost = 1)
 
   output_season_vhr_d_360 <- run_sample_custom(seeds[1:S],  datalist$vhr_seasonal, vac_par_info_d_360, 0, post)
-  output_season_d_360 <- run_sample_custom(seeds[1:S],  datalist$mabs_seasonal, vac_par_info_d_360, 0, post)
+  output_season_d_360 <- run_sample_custom(seeds[1:S],  datalist$seasonal, vac_par_info_d_360, 0, post)
   output_yr_d_360 <- run_sample_custom(seeds[1:S], datalist$year_round, vac_par_info_d_360, 0, post)
-  output_season_catchup_d_360 <- run_sample_custom(seeds[1:S], datalist$mabs_seasonal_catchup, vac_par_info_d_360, 0, post)
+  output_season_catchup_d_360 <- run_sample_custom(seeds[1:S], datalist$seasonal_catchup, vac_par_info_d_360, 0, post)
   output_season_catchup_nip_d_360 <- run_sample_custom(seeds[1:S],  datalist$seasonal_catchup_nip, vac_par_info_d_360, 0, post)
 
   save(output_season_vhr_d_360, file = here("outputs", "nirsevimab", "impact", "mabs_dur","output_season_vhr_d_360.RData"))
@@ -211,21 +212,27 @@ run_icer_mabs_dur <- function(datalist, threshold) {
 
   list_outputs <- list(output_default_base, output_season_vhr_d_360, output_season_d_360,
     output_season_catchup_d_360, output_season_catchup_nip_d_360)
-  list_names <- list("d_360_mab_vhr_icer", "d_360_mab_icer",
-    "d_360_mab_catchup_icer", "d_360_mab_catchup_nip_icer")
+  list_names <-  list("vhr", "seasonal",
+    "seasonal_and_catchup", "seasonal_and_catchup_nip")
   ppd_d_360 <- cal_impact_standard(list_outputs, list_names, threshold)
   save(ppd_d_360, file = here::here("outputs", "nirsevimab", "icer", "d_360_icer.RData"))
 
 }
 
-
-
 run_icer_coverage <- function(datalist, threshold, coverage) {
 
-    seeds <- data_list$seeds
-    post <- data_list$post
-    S <- data_list$S
+    seeds <- datalist$seeds
+    post <- datalist$post
+    S <- datalist$S
+    vac_par_info <- datalist$vac_par_info
 
+    pal_eff <- datalist$pal_eff
+    mab_eff <- datalist$mab_eff
+
+    ind_pal <- c(rep(1, 9), rep(0, 16)) # VHR (<8 months)
+    ind_mabs <- c(rep(1, 1), rep(0, 24)) # Birth only (0 months only)
+    G_plus <- c(1.0,1.0,1.0,1.0,1.0,1.0,1.0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+  
     source("R/cea.R")
 
     load(file = here("outputs", "nirsevimab", "impact", "base", "status_quo_base.RData")) # output_default_base
@@ -283,20 +290,28 @@ run_icer_coverage <- function(datalist, threshold, coverage) {
 
     list_outputs <- list(output_default_base, output_season_vhr_low_cov, output_season_low_cov,
         output_season_catchup_low_cov, output_season_catchup_nip_low_cov)
-    list_names <- list("low_cov_mab_vhr_icer", "low_cov_mab_icer",
-        "low_cov_mab_catchup_icer", "low_cov_mab_catchup_nip_icer")
+    list_names <-  list("vhr", "seasonal",
+    "seasonal_and_catchup", "seasonal_and_catchup_nip")
     ppd_low_cov <- cal_impact_standard(list_outputs, list_names, threshold)
     save(ppd_low_cov, file = here::here("outputs", "nirsevimab", "icer", "low_cov_icer.RData"))
 }
 
 run_icer_admin_year <- function(datalist, threshold, ind_mabs) {
 
-  seeds <- data_list$seeds
-  post <- data_list$post
-  S <- data_list$S
+  seeds <- datalist$seeds
+  post <- datalist$post
+  S <- datalist$S
+  vac_par_info <- datalist$vac_par_info
+
+  pal_eff <- datalist$pal_eff
+  mab_eff <- datalist$mab_eff
+
+  ind_pal <- c(rep(1, 9), rep(0, 16)) # VHR (<8 months)
+  G_plus <- c(1.0,1.0,1.0,1.0,1.0,1.0,1.0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+
   source("R/cea.R")
 
-  load(file = here("outputs", "nirsevimab", "impact", "status_quo_base.RData")) # output_default_base
+  load(file = here("outputs", "nirsevimab", "impact", "base", "status_quo_base.RData")) # output_default_base
 
 
   make_vac_program_info_mabs_vhr_seasonal <- function(seed) {
@@ -353,9 +368,9 @@ run_icer_admin_year <- function(datalist, threshold, ind_mabs) {
 
   list_outputs <- list(output_default_base, output_season_vhr_2mo, output_season_2mo,
     output_season_catchup_2mo, output_season_catchup_nip_2mo)
-  list_names <- list("2mo_mab_vhr_icer", "2mo_mab_icer",
-    "2mo_mab_catchup_icer", "2mo_mab_catchup_nip_icer")
+  list_names <-  list("vhr", "seasonal",
+    "seasonal_and_catchup", "seasonal_and_catchup_nip")
   ppd_2mo <- cal_impact_standard(list_outputs, list_names, 20000)
-  save(ppd_l2mo, file = here::here("outputs", "nirsevimab", "icer", "2mo_icer.RData"))
+  save(ppd_2mo, file = here::here("outputs", "nirsevimab", "icer", "2mo_icer.RData"))
 
 }

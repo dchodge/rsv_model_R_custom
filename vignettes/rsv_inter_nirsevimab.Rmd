@@ -24,6 +24,9 @@ library(BayesianTools)
 library(devtools)
 library(here)
 library(patchwork)
+library(triangle)
+
+
 #source( here::here("src", "helpers.R")) #ensure c++14 is enabled
 
 ```
@@ -57,7 +60,7 @@ Three examples of how to implement your own custom calendars are given below.
 ```{r}
 
 source(here("R", "run_scripts.R")) # Uploads emmake_RunInterventionspty function
-make_data_list()
+# make_data_list() do not rerun, will create new efficacy values and will consequently have to rerun everything
 
 ```
 
@@ -86,13 +89,13 @@ run_icer_base(15000, "lower_icer")
 
 source("R/cea.R")
 
-load(file = here("outputs", "nirsevimab", "impact", "none.RData")) # output_default_none
-load(file = here("outputs", "nirsevimab", "impact", "status_quo_base.RData")) # output_default_base
-load(file = here("outputs", "nirsevimab", "impact", "output_season_vhr_base.RData")) # output_season_vhr_base
-load(file = here("outputs", "nirsevimab", "impact", "output_season_base.RData")) # output_season_base
-load(file = here("outputs", "nirsevimab", "impact", "output_yr_base.RData")) # output_yr_base
-load(file = here("outputs", "nirsevimab", "impact", "output_season_catchup_base.RData")) # output_season_catchup_base
-load(file = here("outputs", "nirsevimab", "impact", "output_season_catchup_nip_base.RData")) # output_season_catchup_nip_base
+load(file = here("outputs", "nirsevimab", "impact", "base", "none.RData")) # output_default_none
+load(file = here("outputs", "nirsevimab", "impact", "base", "status_quo_base.RData")) # output_default_base
+load(file = here("outputs", "nirsevimab", "impact", "base", "output_season_vhr_base.RData")) # output_season_vhr_base
+load(file = here("outputs", "nirsevimab", "impact", "base", "output_season_base.RData")) # output_season_base
+load(file = here("outputs", "nirsevimab", "impact", "base", "output_yr_base.RData")) # output_yr_base
+load(file = here("outputs", "nirsevimab", "impact", "base", "output_season_catchup_base.RData")) # output_season_catchup_base
+load(file = here("outputs", "nirsevimab", "impact", "base", "output_season_catchup_nip_base.RData")) # output_season_catchup_nip_base
 
 get_cea_plane_info <- function(none, output, name) {
   pal_cost <- 4035.50
@@ -134,17 +137,14 @@ plot_plane(icer_table, 30) # holds assuming price is at least £30
 ```{r}
 
 # Sensitivity analysis
-run_model_mabs_dur(data_list) 
-run_icer_mabs_dur(20000)
-
-run_icer_coverage(data_list, 20000, 0.7)
+run_icer_mabs_dur(data_list, 20000)
 run_icer_coverage(data_list, 20000, 0.7)
 ind_mabs_2mo <- c(0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-run_icer_admin_year(datalist, 20000, ind_mabs_2mo)
+run_icer_admin_year(data_list, 20000, ind_mabs_2mo)
 
 ```
 
-# Calculate purchasing price per dose
+# Calculate purchasing price per dose (FIG 1a)
 
 ```{r}
 
@@ -168,17 +168,17 @@ get_change <- function(base, inter, string) {
   left_join(
     get_new_data_frame(base) %>% rename(tot_inci_base = tot_inci),
     get_new_data_frame(inter) %>% rename(tot_inci_output = tot_inci)
-  )  %>% mutate(inci_averted = (tot_inci_base - tot_inci_output) / tot_inci_base, type = string, .keep = "unused") %>%
+  )  %>% mutate(inci_averted = (tot_inci_base - tot_inci_output) / tot_inci_base, type = string) %>%
     filter(!is.na(inci_averted)) %>% as.data.frame
 }
 
 full_inter_outcomes <- bind_rows(
   get_change(output_default_base, output_season_vhr_base, "VHR"),
-  get_change(output_default_base, output_season_base, "Seasonal"),
-  get_change(output_default_base, output_yr_base, "Year-round"),
-  get_change(output_default_base, output_season_catchup_base, "Seasonal + catchup"),
-  get_change(output_default_base, output_season_catchup_nip_base, "Season + pid catchup")
-) %>% mutate(type = factor(type, c("VHR", "Seasonal", "Year-round", "Seasonal + catchup", "Season + pid catchup"))) %>%
+  get_change(output_default_base, output_season_base, "S"),
+  get_change(output_default_base, output_yr_base, "YR"),
+  get_change(output_default_base, output_season_catchup_base, "S-catchup"),
+  get_change(output_default_base, output_season_catchup_nip_base, "S-catchup-pid")
+) %>% mutate(type = factor(type, c("VHR", "S", "YR", "S-catchup", "S-catchup-pid"))) %>%
   filter(outcome != "all_cases") %>%
   mutate(outcome = factor(outcome, levels = c("symptomatic_cases", "gp_visits", "hospital_cases", "bed_days", "deaths"))) %>%
   mutate(outcome = case_when(
@@ -188,28 +188,68 @@ full_inter_outcomes <- bind_rows(
     outcome == "bed_days"~"Bed days",
     outcome == "deaths"~"Deaths"
   )
-  )
+  )  %>%
+  mutate(type = factor(type, levels = c("VHR", "S", "YR", "S-catchup", "S-catchup-pid")))
 
 require(ggdist)
-full_inter_outcomes %>%
+p1A <- full_inter_outcomes %>%
   ggplot() + 
     stat_pointinterval(aes(y = outcome, x = inci_averted, color = outcome, point_fill = outcome), .width = c(0.95), size = 1,
       shape = 21, point_color = "black", point_size = 2, point_alpha = 0.8) + 
     facet_grid(rows = vars(type)) + 
-    labs(x = "Proportion of total cases averted", y = "Healthcare outcome") + theme(legend.position = "none")
-ggsave("outputs", "nirsevimab", "figs", "fig0a.pdf")
+    labs(x = "Proportion of total cases averted", y = "Healthcare outcome") + theme_bw() + theme(legend.position = "none")
+
+type <- c("VHR", "S", "YR", "S-catchup", "S-catchup-pid")
+tot_dose <- c(
+  output_season_vhr_base$vac_cal[1:52, 2] %>% sum,
+  output_season_base$vac_cal[1:52, 2] %>% sum,
+  output_yr_base$vac_cal[1:52, 2] %>% sum,
+  output_season_catchup_base$vac_cal[1:52, 2] %>% sum,
+  output_season_catchup_nip_base$vac_cal[1:52, 2] %>% sum
+)
+
+dose_df <- data.frame(
+  type = type, 
+  tot_dose = tot_dose
+)
+
+full_inter_outcomes_doses <- full_inter_outcomes %>% left_join(dose_df, by = "type") %>% 
+  mutate(capd = 1000 * (tot_inci_base - tot_inci_output) / tot_dose) %>% 
+  mutate(type = factor(type, c("VHR", "S", "YR", "S-catchup", "S-catchup-pid")))
+
+
+
+p1B <- full_inter_outcomes_doses %>%
+  ggplot() + 
+    stat_pointinterval(aes(y = outcome, x = capd, color = outcome, point_fill = outcome), .width = c(0.95), size = 1,
+      shape = 21, point_color = "black", point_size = 2, point_alpha = 0.8) + 
+    facet_grid(rows = vars(type)) + 
+    labs(x = "Number of cases averted per 1000 doses", y = "Healthcare outcome") + theme_bw() + theme(legend.position = "none", 
+    axis.text.y = element_blank(), axis.title.y = element_blank()) 
+
 
 ```
 
 # Look athe indirect effects 
 ```{r}
 
+library(here)
+load(file = here("outputs", "nirsevimab", "impact", "base", "none.RData")) # output_default_none
+load(file = here("outputs", "nirsevimab", "impact", "base", "status_quo_base.RData")) # output_default_base
+load(file = here("outputs", "nirsevimab", "impact", "base", "output_season_vhr_base.RData")) # output_season_vhr_base
+load(file = here("outputs", "nirsevimab", "impact", "base", "output_season_base.RData")) # output_season_base
+load(file = here("outputs", "nirsevimab", "impact", "base", "output_yr_base.RData")) # output_yr_base
+load(file = here("outputs", "nirsevimab", "impact", "base", "output_season_catchup_base.RData")) # output_season_catchup_base
+load(file = here("outputs", "nirsevimab", "impact", "base", "output_season_catchup_nip_base.RData")) # output_season_catchup_nip_base
 
+load(file = here("outputs", "nirsevimab", "impact", "base", "none_d.RData")) # output_default_none_d
+load(file = here("outputs", "nirsevimab", "impact", "base", "status_quo_base_d.RData")) # output_default_base_d
+load(file = here("outputs", "nirsevimab", "impact", "base", "output_season_vhr_base_d.RData")) # output_season_vhr_base_d
+load(file = here("outputs", "nirsevimab", "impact", "base", "output_season_base_d.RData")) # output_season_base_d
+load(file = here("outputs", "nirsevimab", "impact", "base", "output_yr_base_d.RData")) # output_yr_base_d
+load(file = here("outputs", "nirsevimab", "impact", "base", "output_season_catchup_base_d.RData")) # output_season_catchup_base_d
+load(file = here("outputs", "nirsevimab", "impact", "base", "output_season_catchup_nip_base_d.RData")) # output_season_catchup_nip_base_d
 
-```
-
-
-```{r}
 
 get_new_data_frame_age <- function(df_outputs) {
   df_outputs$outcomes_week_age %>%
@@ -224,32 +264,62 @@ get_new_data_frame_age <- function(df_outputs) {
     summarise(tot_inci = sum(incidence))
 }
 
-get_change <- function(base, inter, string) {
-  left_join(
-    get_new_data_frame(base) %>% rename(tot_inci_base = tot_inci),
-    get_new_data_frame(inter) %>% rename(tot_inci_output = tot_inci)
-  ) %>% mutate(inci_averted = (tot_inci_base - tot_inci_output), type = string, .keep = "unused") 
+get_prob_direct_df <- function(base, inter, base_d, inter_d, string) {
+    left_join(
+      left_join(
+        left_join(
+          get_new_data_frame_age(base) %>% rename(tot_inci_base = tot_inci),
+          get_new_data_frame_age(base_d) %>% rename(tot_inci_d_base = tot_inci)
+        ),
+        get_new_data_frame_age(inter) %>% rename(tot_inci_inter = tot_inci)
+      ),
+      get_new_data_frame_age(inter_d) %>% rename(tot_inci_d_inter = tot_inci)
+    ) %>%  mutate(cases_averted_direct =  tot_inci_base - tot_inci_d_inter, cases_averted_indirect = tot_inci_d_inter - tot_inci_inter) %>%
+    mutate(cases_averted_direct_prop = cases_averted_direct / sum(tot_inci_base), cases_averted_indirect_prop = cases_averted_indirect / sum(tot_inci_base)) %>% 
+    mutate(name = string)
 }
 
-full_inter_outcomes_age <- bind_rows(
-  get_change(output_default_base, output_season_vhr_base, "vhr"),
-  get_change(output_default_base, output_season_base, "season"),
-  get_change(output_default_base, output_yr_base, "year round"),
-  get_change(output_default_base, output_season_catchup_base, "season catchup"),
-  get_change(output_default_base, output_season_catchup_nip_base, "season catchup + pid")
+direct_df <- bind_rows(
+  get_prob_direct_df(output_default_base, output_season_vhr_base, output_default_base_d, output_season_vhr_base_d, "VHR"),
+  get_prob_direct_df(output_default_base, output_season_base, output_default_base_d, output_season_base_d, "S"),
+  get_prob_direct_df(output_default_base, output_yr_base, output_default_base_d, output_yr_base_d, "YR"),
+  get_prob_direct_df(output_default_base, output_season_catchup_base, output_default_base_d, output_season_catchup_base_d, "S-catchup"),
+  get_prob_direct_df(output_default_base, output_season_catchup_nip_base, output_default_base_d, output_season_catchup_nip_base_d, "S-catchup-pid")
 )
 
-full_inter_outcomes <- full_inter_outcomes_age %>% 
-  group_by(outcome, seed, type) %>% summarise(inci_averted = sum(inci_averted))
+direct_df_summary <- direct_df %>% group_by(outcome, age_group_cat, name) %>%
+  summarise(cases_averted_direct_prop = mean(cases_averted_direct_prop), cases_averted_indirect_prop = mean(cases_averted_indirect_prop)) %>%
+  pivot_longer(c(cases_averted_direct_prop, cases_averted_indirect_prop), names_to = "aversion_type", values_to = "prop")
 
-require(ggdist)
-full_inter_outcomes %>%
+direct_df_summary_plt <- direct_df_summary %>%
+  mutate(aversion_type = case_when(
+    aversion_type == "cases_averted_direct_prop"~"Direct effects",
+    aversion_type == "cases_averted_indirect_prop"~"Indirect effects")) %>%
+  mutate(outcome = case_when(
+    outcome == "all_cases"~"All cases",
+    outcome == "symptomatic_cases"~"Symptomatic cases",
+    outcome == "gp_visits"~"GP consultations",
+    outcome == "hospital_cases"~"Hospital cases",
+    outcome == "bed_days"~"Bed days",
+    outcome == "deaths"~"Deaths"
+  )) %>% 
+  mutate(outcome = factor(outcome,
+    levels = c("All cases", "Symptomatic cases", "GP consultations", "Hospital cases", "Bed days", "Deaths") )) %>%
+  mutate(age_group_cat = factor(age_group_cat, levels = c("<6 mo", "6-11 mo", "1-4 yrs", "5-64 yrs", "65+ yrs"))) %>%
+  mutate(name = factor(name, levels = c("VHR", "S", "YR", "S-catchup", "S-catchup-pid")))
+
+p2 <- direct_df_summary_plt %>% 
   ggplot() + 
-    stat_pointinterval(aes(y = outcome, x = inci_averted)) + 
-    facet_grid(rows = vars(type))
-
+    geom_col(aes(y = outcome, x = prop, fill = age_group_cat)) + 
+    facet_grid(cols = vars(aversion_type), rows = vars(name)) + 
+    labs(y = "Healthcare outcome", x = "Proportion of total cases averted", fill = "Age group") + theme_bw() + 
+    theme(axis.text.x = element_text(angle = 90))
+  
+(p1A + p1B) / p2 + plot_annotation(tag_levels = 'A')
+ggsave(file = here::here("outputs", "nirsevimab", "figs", "fig0a.pdf"), heigh = 11, width = 10)
 
 ```
+
 
 
 # Run and plot stuff
@@ -266,14 +336,19 @@ lower_icer <- get(lower_icer_temp) %>% mutate(icer_threshold = "15000")
 
 icer <- bind_rows(base_icer, lower_icer) %>%
   mutate(scale = case_when(names == "vhr"~2, names != "vhr"~1)) %>%
-  mutate(names = factor(names, levels = c("vhr", "seasonal", "seasonal_and_catchup", "seasonal_and_catchup_nip")))
+  mutate(names = factor(names, levels = c("vhr", "seasonal", "seasonal_and_catchup", "seasonal_and_catchup_nip"))) %>%
+  mutate(names = case_when(
+    names == "vhr"~"VHR",
+    names == "seasonal"~"S",
+    names == "seasonal_and_catchup"~"S-catchup",
+    names == "seasonal_and_catchup_nip"~"S-catchup-pid"))
 
 p1 <- icer %>% 
-  filter(names == "vhr") %>%
+  filter(names == "VHR") %>%
   ggplot() + 
     geom_boxplot(aes(x = names, y = ppd, fill = icer_threshold) )
 p2 <- icer %>% 
-  filter(names != "vhr") %>%
+  filter(names != "VHR") %>%
   ggplot() + 
     geom_boxplot(aes(x = names, y = ppd, fill = icer_threshold) )
 
@@ -304,7 +379,47 @@ gp <- ggplot_gtable(ggplot_build(g))
 facet.columns <- gp$layout$l[grepl("panel", gp$layout$name)]
 gp$widths[facet.columns] <- gp$widths[facet.columns] * c(2, 1)
 grid::grid.draw(gp)
-ggsave(file = here::here("outputs", "nirsevimab", "figs", "fig1b.pdf"))
+ggsave(file = here::here("outputs", "nirsevimab", "figs", "fig1b.pdf"), width = 11, height = 5)
+
+```
+
+# Sensitivity analysis plots
+
+```{r}
+
+
+base_icer_temp <- load(here::here("outputs", "nirsevimab", "icer", "base_icer.RData"))
+base_icer <- get(base_icer_temp) %>% mutate(type = "base")
+
+d_250_icer_temp <- load(here::here("outputs", "nirsevimab", "icer", "d_250_icer.RData"))
+d_250_icer <- get(d_250_icer_temp) %>% mutate(type = "250_days")
+
+d_360_icer_temp <- load(here::here("outputs", "nirsevimab", "icer", "d_360_icer.RData"))
+d_360_icer <- get(d_360_icer_temp) %>% mutate(type = "360_days")
+
+mo2_icer_temp <- load(here::here("outputs", "nirsevimab", "icer", "2mo_icer.RData"))
+mo2_icer <- get(mo2_icer_temp) %>% mutate(type = "2mo_vac")
+
+low_cov_icer_temp <- load(here::here("outputs", "nirsevimab", "icer", "low_cov_icer.RData"))
+low_cov_icer <- get(low_cov_icer_temp) %>% mutate(type = "cov_70")
+
+lower_icer_temp <- load(here::here("outputs", "nirsevimab", "icer", "lower_icer.RData"))
+lower_icer <- get(lower_icer_temp) %>% mutate(type = "low_icer")
+
+icer <- bind_rows(base_icer, d_250_icer, d_360_icer, mo2_icer, low_cov_icer, lower_icer) %>%
+  mutate(scale = case_when(names == "vhr"~2, names != "vhr"~1)) %>%
+  mutate(names = factor(names, levels = c("vhr", "seasonal", "seasonal_and_catchup", "seasonal_and_catchup_nip"))) %>%
+  mutate(names = case_when(
+    names == "vhr"~"VHR",
+    names == "seasonal"~"S",
+    names == "seasonal_and_catchup"~"S-catchup",
+    names == "seasonal_and_catchup_nip"~"S-catchup-pid")) %>% filter(!is.na(names)) %>%
+    group_by(type, names) %>% summarise(ppd_mean = mean(ppd))
+
+icer %>% 
+  ggplot() + 
+    geom_point(aes(y = type, x = ppd_mean)) + 
+      facet_wrap(vars(names), scales = "free")
 
 ```
 
